@@ -1,0 +1,19 @@
+project_id = "tradepulse"
+
+# parse-line-items and send-estimate are called by the signed-in tradesperson
+# from the app, so they keep the default JWT verification. The three below
+# are hit by an unauthenticated customer (or Stripe itself) via the
+# public-token link, so JWT verification is disabled for them.
+[functions.public-quote]
+verify_jwt = false
+
+[functions.create-deposit-session]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Invoked by a cron scheduler, not a logged-in user — protected instead by
+# the x-cron-secret header checked inside the function.
+[functions.check-overdue-invoices]
+verify_jwt = false

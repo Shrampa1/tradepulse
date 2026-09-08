@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "TradePulse",
+    "slug": "tradepulse",
+    "scheme": "tradepulse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tradepulse.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "TradePulse uses your microphone to record voice notes that are turned into estimate line items.",
+        "NSCameraUsageDescription": "TradePulse uses your camera to photograph job sites so AI can suggest line items.",
+        "NSPhotoLibraryUsageDescription": "TradePulse needs access to your photo library to attach job site photos to estimates."
+      }
+    },
+    "android": {
+      "package": "com.tradepulse.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "permissions": ["RECORD_AUDIO", "CAMERA", "READ_MEDIA_IMAGES"]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "TradePulse uses your microphone to record voice notes that are turned into estimate line items."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TradePulse needs access to your photo library to attach job site photos.",
+          "cameraPermission": "TradePulse uses your camera to photograph job sites so AI can suggest line items."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
