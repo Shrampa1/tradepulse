@@ -1,5 +1,5 @@
 // Thin wrappers around the Supabase Edge Functions that need a secret key
-// (OpenAI, Stripe) and therefore can't run on-device. Everything else in the
+// (Gemini, Stripe) and therefore can't run on-device. Everything else in the
 // app talks to Postgres directly via `supabase` and relies on RLS.
 import { supabase } from "@/lib/supabase";
 import type { DraftLineItem } from "@/types/database";

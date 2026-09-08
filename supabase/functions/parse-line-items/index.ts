@@ -1,22 +1,43 @@
 // Turns a voice note (transcript or raw audio) or a job-site photo into
-// structured estimate line items using OpenAI. Runs server-side because it
-// needs OPENAI_API_KEY, which must never ship inside the mobile app.
-import OpenAI, { toFile } from "npm:openai@4";
+// structured estimate line items using Google's Gemini API. Runs server-side
+// because it needs GEMINI_API_KEY, which must never ship inside the mobile
+// app. Gemini handles audio and images natively in one call, so there's no
+// separate transcription step (unlike Whisper + a text model).
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { getUserId } from "../_shared/supabase-admin.ts";
 
-const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-const LINE_ITEMS_SYSTEM_PROMPT = `You are an assistant for tradespeople (contractors, landscapers, cleaners) \
-turning a description of completed or planned work into estimate line items. \
-Return STRICT JSON only, matching this shape:
-{"lineItems": [{"description": string, "quantity": number, "unit_price": number}]}
+const SYSTEM_PROMPT = `You are an assistant for tradespeople (contractors, landscapers, cleaners) \
+turning a description of completed or planned work into estimate line items.
 Rules:
-- Infer a reasonable quantity (default 1) and a reasonable US market unit price per item \
-  if the input doesn't give one explicitly.
+- If given audio, first understand what the speaker describes doing (or planning to do), then extract line items from it — don't just transcribe.
+- Infer a reasonable quantity (default 1) and a reasonable US market unit price per item if the input doesn't give one explicitly.
 - Split distinct tasks/materials into separate line items.
 - Keep descriptions short and client-facing (e.g. "Trim front hedges", "Haul away debris").
-- If you cannot identify any billable work, return {"lineItems": []}.`;
+- If given a job-site photo, suggest line items for the work implied by it (e.g. debris to haul, lawn to mow, damage to repair).
+- If you cannot identify any billable work, return an empty lineItems array.`;
+
+const LINE_ITEMS_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    lineItems: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          description: { type: "STRING" },
+          quantity: { type: "NUMBER" },
+          unit_price: { type: "NUMBER" },
+        },
+        required: ["description", "quantity", "unit_price"],
+      },
+    },
+  },
+  required: ["lineItems"],
+};
 
 type RequestBody = {
   mode: "voice" | "photo";
@@ -32,23 +53,32 @@ Deno.serve(async (req) => {
   if (preflight) return preflight;
 
   const userId = await getUserId(req);
-  if (!userId) {
-    return json({ error: "Unauthorized" }, 401);
-  }
+  if (!userId) return json({ error: "Unauthorized" }, 401);
 
   try {
     const body = (await req.json()) as RequestBody;
 
     if (body.mode === "voice") {
-      const transcript = body.transcript ?? (await transcribe(body.audioBase64, body.audioMimeType));
-      if (!transcript) return json({ error: "No speech detected." }, 422);
-      const lineItems = await extractLineItemsFromText(transcript);
+      if (!body.transcript && !body.audioBase64) {
+        return json({ error: "transcript or audioBase64 is required." }, 422);
+      }
+      const parts = body.audioBase64
+        ? [
+            { text: "Here is a voice note describing the work. Extract line items from it." },
+            { inline_data: { mime_type: body.audioMimeType ?? "audio/m4a", data: body.audioBase64 } },
+          ]
+        : [{ text: body.transcript! }];
+      const lineItems = await callGemini(parts);
       return json({ lineItems });
     }
 
     if (body.mode === "photo") {
       if (!body.imageBase64) return json({ error: "imageBase64 is required." }, 422);
-      const lineItems = await extractLineItemsFromImage(body.imageBase64, body.imageMimeType ?? "image/jpeg");
+      const parts = [
+        { text: "Suggest line items for the work implied by this job site photo." },
+        { inline_data: { mime_type: body.imageMimeType ?? "image/jpeg", data: body.imageBase64 } },
+      ];
+      const lineItems = await callGemini(parts);
       return json({ lineItems });
     }
 
@@ -59,50 +89,28 @@ Deno.serve(async (req) => {
   }
 });
 
-async function transcribe(audioBase64?: string, mimeType = "audio/m4a") {
-  if (!audioBase64) return null;
-  const bytes = base64ToBytes(audioBase64);
-  const extension = mimeType.includes("m4a") ? "m4a" : mimeType.includes("wav") ? "wav" : "mp3";
-  const file = await toFile(bytes, `voice-note.${extension}`, { type: mimeType });
-
-  const transcription = await openai.audio.transcriptions.create({
-    file,
-    model: "whisper-1",
-  });
-  return transcription.text;
-}
-
-async function extractLineItemsFromText(transcript: string) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: LINE_ITEMS_SYSTEM_PROMPT },
-      { role: "user", content: transcript },
-    ],
-  });
-  return parseLineItemsJson(completion.choices[0]?.message?.content);
-}
-
-async function extractLineItemsFromImage(imageBase64: string, mimeType: string) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: LINE_ITEMS_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Suggest line items for the work implied by this job site photo (e.g. debris to haul, lawn to mow, damage to repair).",
-          },
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-        ],
+async function callGemini(parts: Array<Record<string, unknown>>) {
+  const response = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: LINE_ITEMS_RESPONSE_SCHEMA,
       },
-    ],
+    }),
   });
-  return parseLineItemsJson(completion.choices[0]?.message?.content);
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Gemini request failed (${response.status}): ${errorBody}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  return parseLineItemsJson(text);
 }
 
 function parseLineItemsJson(content?: string | null) {
@@ -126,13 +134,6 @@ function parseLineItemsJson(content?: string | null) {
 function toPositiveNumber(value: unknown, fallback: number) {
   const num = Number(value);
   return Number.isFinite(num) && num >= 0 ? num : fallback;
-}
-
-function base64ToBytes(base64: string) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
 }
 
 function json(body: unknown, status = 200) {

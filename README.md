@@ -1,14 +1,14 @@
 # TradePulse
 
-A mobile-first quote-to-invoice app for independent tradespeople (contractors, landscapers, cleaners), built as a native **iOS/Android app with Expo + React Native**, backed by **Supabase** (Postgres, Auth, Storage, Edge Functions), **OpenAI** (voice/photo → line items), and **Stripe** (deposits/payments).
+A mobile-first quote-to-invoice app for independent tradespeople (contractors, landscapers, cleaners), built as a native **iOS/Android app with Expo + React Native**, backed by **Supabase** (Postgres, Auth, Storage, Edge Functions), **Google Gemini** (voice/photo → line items), and **Stripe** (deposits/payments).
 
 > Placeholder icons: `assets/icon.png`, `assets/splash.png`, `assets/adaptive-icon.png` are 1×1 stand-ins so the project runs. Replace them with real 1024×1024 artwork before a store submission.
 
 ## Architecture
 
 - **Mobile app** (`app/`, `src/`) — Expo Router + NativeWind (Tailwind for React Native). This is the tradesperson's app: dashboard, AI estimate builder, client CRM. Talks to Postgres directly via `@supabase/supabase-js` (RLS-scoped to `auth.uid()`).
-- **Supabase Edge Functions** (`supabase/functions/`) — the only place secret keys (OpenAI, Stripe) live. There's no separate Next.js/Node backend; Edge Functions are the API layer.
-  - `parse-line-items` — voice transcript/audio or a job photo → structured line items (OpenAI).
+- **Supabase Edge Functions** (`supabase/functions/`) — the only place secret keys (Gemini, Stripe) live. There's no separate Next.js/Node backend; Edge Functions are the API layer.
+  - `parse-line-items` — voice transcript/audio or a job photo → structured line items (Gemini; it handles audio and images natively in one call, no separate transcription step).
   - `send-estimate` — marks an estimate sent, returns its public link.
   - `create-deposit-session` — creates a Stripe Checkout Session for a deposit or balance payment.
   - `stripe-webhook` — verifies Stripe's signature, marks payments/estimates paid.
@@ -23,7 +23,7 @@ This was authored in a sandbox with no Node.js/npm available, so nothing has bee
 - Node.js 20+ and npm
 - [Expo Go](https://expo.dev/go) on your phone (fastest way to run it), or Xcode/Android Studio for simulators
 - The [Supabase CLI](https://supabase.com/docs/guides/cli)
-- A Supabase project, an OpenAI API key, and a Stripe account (test mode is fine)
+- A Supabase project, a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)), and a Stripe account (test mode is fine)
 
 ## Setup
 
