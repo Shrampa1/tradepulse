@@ -11,7 +11,7 @@ export type Profile = {
   user_id: string;
   business_name: string;
   phone: string | null;
-  stripe_account_id: string | null;
+  payment_account_id: string | null;
   tax_rate: number;
   created_at: string;
   updated_at: string;

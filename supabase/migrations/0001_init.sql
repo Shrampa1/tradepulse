@@ -21,7 +21,7 @@ create table profiles (
   user_id uuid not null references auth.users (id) on delete cascade unique,
   business_name text not null default '',
   phone text,
-  stripe_account_id text,
+  payment_account_id text, -- reserved for a future multi-tenant payout integration
   tax_rate numeric(5, 4) not null default 0, -- e.g. 0.0825 = 8.25%
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -72,15 +72,15 @@ create table line_items (
   created_at timestamptz not null default now()
 );
 
--- Payment events recorded from Stripe webhooks, so the app has an audit trail
--- independent of the mutable status fields on `estimates`.
+-- Payment events recorded from the payment gateway's webhook, so the app has
+-- an audit trail independent of the mutable status fields on `estimates`.
 create table payments (
   id uuid primary key default gen_random_uuid(),
   estimate_id uuid not null references estimates (id) on delete cascade,
   kind text not null check (kind in ('deposit', 'balance')),
   amount numeric(12, 2) not null,
-  stripe_checkout_session_id text unique,
-  stripe_payment_intent_id text,
+  checkout_reference text unique, -- gateway's session/tracker id for this checkout attempt
+  provider_payment_id text, -- gateway's id for the completed payment itself, once known
   status text not null default 'pending' check (status in ('pending', 'succeeded', 'failed')),
   created_at timestamptz not null default now()
 );

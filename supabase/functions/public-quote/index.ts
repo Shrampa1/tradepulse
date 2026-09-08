@@ -2,7 +2,7 @@
 // who receives a quote/invoice doesn't have the Expo app installed, so this
 // serves a small, dependency-light HTML page from the public_token in the
 // link. GET renders it; POST persists a signature. Payment itself happens by
-// redirecting to Stripe Checkout (see create-deposit-session).
+// redirecting to Safepay's hosted checkout (see create-deposit-session).
 // verify_jwt is disabled for this function in supabase/config.toml.
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase-admin.ts";
