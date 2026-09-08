@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0F172A"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tradepulse.app",
@@ -28,7 +30,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       },
-      "permissions": ["RECORD_AUDIO", "CAMERA", "READ_MEDIA_IMAGES"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -44,7 +50,10 @@
           "photosPermission": "TradePulse needs access to your photo library to attach job site photos.",
           "cameraPermission": "TradePulse uses your camera to photograph job sites so AI can suggest line items."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-splash-screen",
+      "expo-status-bar"
     ],
     "extra": {
       "router": {

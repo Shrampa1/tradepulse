@@ -15,7 +15,7 @@
 // NO REFUND FUNCTION HERE (intentionally, matching YDEL) — no confirmed
 // self-serve refund API exists; refunds are processed from the Safepay
 // dashboard.
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ENVIRONMENT = Deno.env.get("SAFEPAY_ENVIRONMENT") || "sandbox";
 const API_KEY = Deno.env.get("SAFEPAY_API_KEY")!;

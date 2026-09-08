@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Service-role client: bypasses RLS. Only ever used server-side, inside edge
 // functions, and only for the specific rows a request has already proven it
