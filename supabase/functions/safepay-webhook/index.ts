@@ -2,54 +2,50 @@
 // completes. verify_jwt is disabled for this function in supabase/config.toml
 // since Safepay, not a logged-in user, calls it.
 //
-// Reference: https://safepay-docs.netlify.app/developers/webhooks/verify-hmac-signatures
-// Signature: header `X-SFPY-SIGNATURE`, HMAC-SHA512 hex digest of the raw
-// request body, keyed with the endpoint's "shared secret" from Safepay's
-// Dashboard -> Developers -> Endpoints (a different value from SAFEPAY_SECRET_KEY).
+// The HMAC-SHA512-over-`data`-field scheme here is ported from the sibling
+// YDEL project (src/lib/safepay.ts), which verified it empirically. The
+// payload field names (token/state) are YDEL's best guess at the shape,
+// flagged in its own comments as NOT yet exercised against a real webhook
+// delivery — treat a mismatch here as the first thing to check if payments
+// succeed in the sandbox but this function never fires. public-quote's
+// return-page fallback (a direct tracker status check) covers that gap in
+// the meantime, same as YDEL's checkout return page does.
 import { supabaseAdmin } from "../_shared/supabase-admin.ts";
-
-const WEBHOOK_SECRET = Deno.env.get("SAFEPAY_WEBHOOK_SECRET")!;
+import {
+  verifyWebhookSignature,
+  SUCCESS_PATTERN,
+  FAILURE_PATTERN,
+  markPaymentSucceeded,
+} from "../_shared/safepay.ts";
 
 Deno.serve(async (req) => {
+  const body = await req.json();
   const signature = req.headers.get("x-sfpy-signature");
-  const rawBody = await req.text();
 
-  if (!signature) return new Response("Missing X-SFPY-SIGNATURE header", { status: 400 });
-
-  const expected = await hmacSha512Hex(WEBHOOK_SECRET, rawBody);
-  if (!timingSafeEqual(expected, signature)) {
-    console.error("Safepay webhook signature mismatch");
-    return new Response("Invalid signature", { status: 400 });
+  if (!(await verifyWebhookSignature(body.data, signature))) {
+    return new Response(JSON.stringify({ error: "Invalid signature" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const event = JSON.parse(rawBody);
+  const trackerToken: string | undefined = body.data?.token;
+  const state: string | undefined = body.data?.state;
 
-  // https://safepay-docs.netlify.app/developers/webhooks/webhook-types
-  if (event.type === "payment.succeeded") {
-    const metadata = event.data?.metadata ?? {};
-    const estimateId = metadata.estimateId;
-    const kind = metadata.kind as "deposit" | "balance" | undefined;
-    const trackerToken = event.data?.tracker as string | undefined;
+  if (trackerToken && state) {
+    const admin = supabaseAdmin();
+    const { data: payment } = await admin
+      .from("payments")
+      .select("id, estimate_id, kind, status")
+      .eq("checkout_reference", trackerToken)
+      .maybeSingle();
 
-    if (estimateId && kind) {
-      const admin = supabaseAdmin();
-      const now = new Date().toISOString();
-
-      if (trackerToken) {
-        await admin
-          .from("payments")
-          .update({ status: "succeeded", provider_payment_id: event.token ?? null })
-          .eq("checkout_reference", trackerToken);
+    if (payment && payment.status === "pending") {
+      if (SUCCESS_PATTERN.test(state)) {
+        await markPaymentSucceeded(admin, payment);
+      } else if (FAILURE_PATTERN.test(state)) {
+        await admin.from("payments").update({ status: "failed" }).eq("id", payment.id);
       }
-
-      await admin
-        .from("estimates")
-        .update(
-          kind === "deposit"
-            ? { status: "deposit_paid", deposit_paid_at: now }
-            : { status: "paid", paid_at: now }
-        )
-        .eq("id", estimateId);
     }
   }
 
@@ -57,24 +53,3 @@ Deno.serve(async (req) => {
     headers: { "Content-Type": "application/json" },
   });
 });
-
-async function hmacSha512Hex(secret: string, data: string) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-512" },
-    false,
-    ["sign"]
-  );
-  const signatureBuffer = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-  return Array.from(new Uint8Array(signatureBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function timingSafeEqual(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}

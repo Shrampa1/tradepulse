@@ -1,7 +1,12 @@
+// Must match SAFEPAY_CURRENCY (an edge function secret, so it can't be read
+// directly from here) — the app only displays amounts, Safepay is what
+// actually charges them, so keep the two in sync by hand if you change either.
+const CURRENCY = process.env.EXPO_PUBLIC_CURRENCY ?? "PKR";
+
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: CURRENCY,
   }).format(amount);
 }
 

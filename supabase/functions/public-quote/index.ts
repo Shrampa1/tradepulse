@@ -6,6 +6,7 @@
 // verify_jwt is disabled for this function in supabase/config.toml.
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase-admin.ts";
+import { getTracker, SUCCESS_PATTERN, FAILURE_PATTERN, markPaymentSucceeded } from "../_shared/safepay.ts";
 
 const FUNCTIONS_BASE_URL = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 
@@ -14,7 +15,11 @@ Deno.serve(async (req) => {
   if (preflight) return preflight;
 
   const url = new URL(req.url);
-  const token = url.searchParams.get("token");
+  // Safepay redirects the customer back here with its own `?order_id=...
+  // &tracker=...` (order_id echoes the value we passed as orderId when
+  // building the checkout URL, i.e. our own public_token) rather than any
+  // query string of ours — see create-deposit-session.
+  const token = url.searchParams.get("token") ?? url.searchParams.get("order_id");
   if (!token) return html("Missing quote link.", 400);
 
   const admin = supabaseAdmin();
@@ -27,6 +32,32 @@ Deno.serve(async (req) => {
       .eq("public_token", token);
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });
+  }
+
+  // Fallback for when the webhook hasn't landed yet (or its field-name
+  // guesses don't match — see safepay-webhook's comment): if the customer
+  // just came back from checkout, check the tracker's live status directly.
+  const trackerToken = url.searchParams.get("tracker");
+  if (trackerToken) {
+    try {
+      const [tracker, { data: payment }] = await Promise.all([
+        getTracker(trackerToken),
+        admin
+          .from("payments")
+          .select("id, estimate_id, kind, status")
+          .eq("checkout_reference", trackerToken)
+          .maybeSingle(),
+      ]);
+      if (payment && payment.status === "pending") {
+        if (SUCCESS_PATTERN.test(tracker.state)) await markPaymentSucceeded(admin, payment);
+        else if (FAILURE_PATTERN.test(tracker.state))
+          await admin.from("payments").update({ status: "failed" }).eq("id", payment.id);
+      }
+    } catch (err) {
+      console.error("Safepay tracker status check failed", err);
+      // Leave the estimate's status as-is; the webhook may still land, or the
+      // customer can retry payment.
+    }
   }
 
   const { data: estimate, error } = await admin
@@ -43,17 +74,18 @@ Deno.serve(async (req) => {
     .eq("user_id", estimate.user_id)
     .single();
 
-  const paidBanner = url.searchParams.get("paid") === "1";
-
-  return html(renderPage(estimate, profile, token, paidBanner));
+  return html(renderPage(estimate, profile, token));
 });
 
-function renderPage(estimate: any, profile: any, token: string, paidBanner: boolean) {
+const CURRENCY_PREFIX: Record<string, string> = { PKR: "Rs ", USD: "$" };
+
+function renderPage(estimate: any, profile: any, token: string) {
   const lineItems = (estimate.line_items ?? []).sort((a: any, b: any) => a.sort_order - b.sort_order);
   const showDepositButton = estimate.deposit_amount > 0 && estimate.status === "sent";
   const showBalanceButton = ["invoiced", "overdue"].includes(estimate.status);
   const isSigned = Boolean(estimate.signed_at);
-  const money = (n: number) => `$${Number(n).toFixed(2)}`;
+  const currency = Deno.env.get("SAFEPAY_CURRENCY") ?? "PKR";
+  const money = (n: number) => `${CURRENCY_PREFIX[currency] ?? ""}${Number(n).toFixed(2)}`;
 
   return `<!doctype html>
 <html lang="en">
@@ -85,7 +117,6 @@ function renderPage(estimate: any, profile: any, token: string, paidBanner: bool
 </head>
 <body>
 <div class="wrap">
-  ${paidBanner ? '<div class="banner">Payment received — thank you!</div>' : ""}
   <div class="muted">${escapeHtml(profile?.business_name || "")}</div>
   <h1>Quote for ${escapeHtml(estimate.clients?.name || "you")}</h1>
   <span class="badge">${escapeHtml(statusLabel(estimate.status))}</span>
@@ -133,6 +164,7 @@ function renderPage(estimate: any, profile: any, token: string, paidBanner: bool
       ? `<button class="pay" id="pay-balance">Pay balance — ${money(estimate.total_amount)}</button>`
       : ""
   }
+  ${estimate.status === "deposit_paid" ? '<div class="banner">Deposit received — thank you!</div>' : ""}
   ${estimate.status === "paid" ? '<div class="banner">Paid in full — thank you!</div>' : ""}
 </div>
 

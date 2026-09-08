@@ -10,7 +10,7 @@ A mobile-first quote-to-invoice app for independent tradespeople (contractors, l
 - **Supabase Edge Functions** (`supabase/functions/`) — the only place secret keys (Gemini, Safepay) live. There's no separate Next.js/Node backend; Edge Functions are the API layer.
   - `parse-line-items` — voice transcript/audio or a job photo → structured line items (Gemini; it handles audio and images natively in one call, no separate transcription step).
   - `send-estimate` — marks an estimate sent, returns its public link.
-  - `create-deposit-session` — creates a Safepay Express Checkout hosted payment link for a deposit or balance payment.
+  - `create-deposit-session` — creates a Safepay hosted checkout link for a deposit or balance payment.
   - `safepay-webhook` — verifies Safepay's HMAC signature, marks payments/estimates paid.
   - `public-quote` — renders the framework-free HTML page a **customer** opens from the shared link (no app install required) to view the quote, sign, and pay.
   - `check-overdue-invoices` — feature E: flips overdue invoices and logs a simulated follow-up reminder; meant to run on a schedule.
@@ -53,9 +53,11 @@ supabase secrets set --env-file supabase/functions/.env
 
 Set `PUBLIC_QUOTE_BASE_URL` in `supabase/functions/.env` to the deployed `public-quote` function's URL (e.g. `https://<project-ref>.supabase.co/functions/v1/public-quote`) before deploying — it's what "Send to Client" links point at.
 
-In your Safepay Dashboard, go to Developers → Endpoints → Add an endpoint, point it at your deployed `safepay-webhook` function URL, subscribe it to the `payment.succeeded` event, then copy its **shared secret** into `SAFEPAY_WEBHOOK_SECRET`.
+In your Safepay Dashboard, go to Developers → Endpoints → Add an endpoint, point it at your deployed `safepay-webhook` function URL, and copy its **shared secret** into `SAFEPAY_WEBHOOK_SECRET`.
 
-> **Heads up on the Safepay integration specifically**: `create-deposit-session` was written against Safepay's published docs for their "Express Checkout" flow (session creation and the final redirect URL are both confirmed exactly from their docs site). One middle step — the `/client/passport/v1/token` call — isn't fully documented publicly; the function's source has a comment on exactly what's uncertain there and how to spot it if that call needs adjusting once you test against your sandbox.
+> **On the Safepay integration**: `supabase/functions/_shared/safepay.ts` is ported from the sibling YDEL project (`../YDEL/src/lib/safepay.ts`), which verified these endpoints/request shapes against a real sandbox rather than relying on Safepay's general docs (which disagree with reality on at least one point — PKR amounts are whole rupees, not paisa, despite the docs' "minor units" claim). Reuse the same `SAFEPAY_API_KEY` sandbox value from YDEL's `.env` rather than creating a second sandbox account. The one piece YDEL itself flags as unverified against a real delivery is the webhook payload's exact field names (`data.token`, `data.state`) — `public-quote` covers that gap with a direct tracker-status check when the customer returns from checkout, same as YDEL's own checkout return page does, so payments still get marked correctly even if the webhook needs a field-name fix later.
+>
+> There's no self-serve refund API — YDEL's exploration found none — so refunds are a manual step in the Safepay dashboard for now.
 
 ### Automated reminders (feature E)
 
