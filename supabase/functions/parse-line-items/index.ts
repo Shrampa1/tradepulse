@@ -7,7 +7,7 @@ import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { getUserId } from "../_shared/supabase-admin.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT = `You are an assistant for tradespeople (contractors, landscapers, cleaners) \
