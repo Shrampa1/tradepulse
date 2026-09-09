@@ -1,6 +1,12 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Text, View } from "react-native";
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  AudioModule,
+  setAudioModeAsync,
+} from "expo-audio";
 import * as FileSystem from "expo-file-system";
 import { Mic, Square } from "lucide-react-native";
 import { Pressable } from "react-native";
@@ -13,34 +19,31 @@ type Props = {
 
 // Records a short voice note describing the work done, uploads it for
 // Whisper transcription + GPT parsing, and hands back structured line items.
+// Uses expo-audio (expo-av was removed in SDK 55).
 export function VoiceCapture({ onParsed }: Props) {
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const [state, setState] = useState<"idle" | "recording" | "processing">("idle");
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
+  const [state, setState] = useState<"idle" | "processing">("idle");
   const [error, setError] = useState<string | null>(null);
 
   async function startRecording() {
     setError(null);
-    const permission = await Audio.requestPermissionsAsync();
+    const permission = await AudioModule.requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setError("Microphone permission is required to record a voice note.");
       return;
     }
 
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-    recordingRef.current = recording;
-    setState("recording");
+    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await recorder.prepareToRecordAsync();
+    recorder.record();
   }
 
   async function stopRecording() {
-    const recording = recordingRef.current;
-    if (!recording) return;
-
     setState("processing");
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      recordingRef.current = null;
+      await recorder.stop();
+      const uri = recorder.uri;
       if (!uri) throw new Error("Recording failed — no audio file was produced.");
 
       const audioBase64 = await FileSystem.readAsStringAsync(uri, {
@@ -59,19 +62,21 @@ export function VoiceCapture({ onParsed }: Props) {
     }
   }
 
+  const isRecording = recorderState.isRecording;
+
   return (
     <View className="items-center gap-2 rounded-2xl border border-border bg-surface p-5">
       <Pressable
-        onPress={state === "recording" ? stopRecording : startRecording}
+        onPress={isRecording ? stopRecording : startRecording}
         disabled={state === "processing"}
         className={`h-16 w-16 items-center justify-center rounded-full ${
-          state === "recording" ? "bg-danger" : "bg-brand-600"
+          isRecording ? "bg-danger" : "bg-brand-600"
         } ${state === "processing" ? "opacity-50" : ""}`}
       >
-        {state === "recording" ? <Square color="#fff" size={22} /> : <Mic color="#fff" size={26} />}
+        {isRecording ? <Square color="#fff" size={22} /> : <Mic color="#fff" size={26} />}
       </Pressable>
       <Text className="text-sm font-medium text-ink">
-        {state === "recording"
+        {isRecording
           ? "Recording… tap to stop"
           : state === "processing"
             ? "Transcribing and parsing…"

@@ -39,7 +39,7 @@
     "plugins": [
       "expo-router",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "TradePulse uses your microphone to record voice notes that are turned into estimate line items."
         }
