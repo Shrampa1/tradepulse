@@ -7,7 +7,6 @@ import {
   AudioModule,
   setAudioModeAsync,
 } from "expo-audio";
-import * as FileSystem from "expo-file-system";
 import { Mic, Square } from "lucide-react-native";
 import { Pressable } from "react-native";
 import { parseLineItemsFromVoice } from "@/lib/api";
@@ -46,8 +45,15 @@ export function VoiceCapture({ onParsed }: Props) {
       const uri = recorder.uri;
       if (!uri) throw new Error("Recording failed — no audio file was produced.");
 
-      const audioBase64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+      // fetch + FileReader works for both a native file:// uri and a web
+      // blob: uri (expo-file-system's readAsStringAsync only handles the
+      // former, so it throws when this runs in a browser).
+      const blob = await (await fetch(uri)).blob();
+      const audioBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
 
       const { lineItems } = await parseLineItemsFromVoice({
