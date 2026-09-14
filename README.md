@@ -14,7 +14,9 @@ A mobile-first quote-to-invoice app for independent tradespeople (contractors, l
   - `safepay-webhook` — verifies Safepay's HMAC signature, marks payments/estimates paid.
   - `public-quote` — renders the framework-free HTML page a **customer** opens from the shared link (no app install required) to view the quote, sign, and pay.
   - `check-overdue-invoices` — feature E: flips overdue invoices and logs a simulated follow-up reminder; meant to run on a schedule.
-- **Supabase Postgres** (`supabase/migrations/0001_init.sql`) — `profiles`, `clients`, `estimates`, `line_items`, plus `payments` and `reminders` to support features D/E, all RLS-protected.
+  - `parse-receipt` — a material receipt photo → vendor/description/amount (Gemini), prefilling an expense.
+  - `generate-recurring-invoices` — for every due recurring contract, creates a sent estimate + line items from its template and advances its schedule; meant to run on a schedule, same as `check-overdue-invoices`.
+- **Supabase Postgres** (`supabase/migrations/`) — `profiles`, `clients`, `estimates`, `line_items`, `payments`, `reminders` (`0001_init.sql`); `expenses` + `profiles.mileage_rate` for receipts/mileage/profit (`0002_expenses.sql`); `appointments` for the job calendar (`0003_appointments.sql`); `recurring_contracts` for maintenance-plan invoicing (`0004_recurring_contracts.sql`). All RLS-protected.
 
 ## Prerequisites
 
@@ -42,12 +44,12 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-This applies `supabase/migrations/0001_init.sql`: tables, RLS policies, the `job-photos` storage bucket, and the triggers that keep `estimates.subtotal_amount/tax_amount/total_amount` in sync with `line_items` and that create a `profiles` row on sign-up.
+This applies every migration in order: tables, RLS policies, the `job-photos`/`receipt-photos` storage buckets, and the triggers that keep `estimates.subtotal_amount/tax_amount/total_amount` in sync with `line_items` and that create a `profiles` row on sign-up.
 
 ### Edge Functions
 
 ```bash
-supabase functions deploy parse-line-items send-estimate create-deposit-session safepay-webhook public-quote check-overdue-invoices
+supabase functions deploy parse-line-items send-estimate create-deposit-session safepay-webhook public-quote check-overdue-invoices parse-receipt generate-recurring-invoices
 supabase secrets set --env-file supabase/functions/.env
 ```
 
@@ -76,6 +78,23 @@ select cron.schedule(
 );
 ```
 
+### Recurring invoicing
+
+Same mechanism as above, for `generate-recurring-invoices` — pick whatever cadence you invoice at (daily is safe: a contract only actually generates an estimate once its own `next_run_at` is due):
+
+```sql
+select cron.schedule(
+  'tradepulse-recurring-invoices',
+  '0 9 * * *', -- daily at 09:00 UTC
+  $$
+  select net.http_post(
+    url := '<your-project-ref>.supabase.co/functions/v1/generate-recurring-invoices',
+    headers := jsonb_build_object('x-cron-secret', '<CRON_SECRET from your .env>')
+  );
+  $$
+);
+```
+
 ### Run the app
 
 ```bash
@@ -89,4 +108,5 @@ Scan the QR code with Expo Go (iOS/Android), or press `i`/`a` for a simulator/em
 - Payment happens on the public web page (`public-quote`), not inside the native app — the customer receiving a quote doesn't have TradePulse installed, so that page has to be a plain link that works in any mobile browser. There's no multi-tenant payout split here (`profiles.payment_account_id` is reserved for that); as built, deposits/invoices are collected directly into one Safepay account, which is enough for a single-tenant test but would need a payout-splitting integration before onboarding multiple tradespeople with money routed to their own bank accounts.
 - "New Quick Invoice" reuses the same estimate builder as "New Estimate", but skips the voice/photo capture and creates the record with `status = 'invoiced'` immediately instead of `draft`.
 - Signatures are stored as a PNG data URL on `estimates.signature_data_url`; there's no separate signatures table since only one signature per estimate is needed.
-- Job-site photos are sent straight to `parse-line-items` for one-off analysis and aren't persisted — the `job-photos` Storage bucket/policies exist in the migration for if/when you want to keep the photo attached to the estimate, but nothing currently uploads to it.
+- Job-site photos are sent straight to `parse-line-items` for one-off analysis and aren't persisted — the `job-photos` Storage bucket/policies exist in the migration for if/when you want to keep the photo attached to the estimate, but nothing currently uploads to it. Receipt photos work the same way against `parse-receipt`/`receipt-photos`.
+- A recurring contract's generated estimate is created with `status = 'sent'` directly (skipping `draft`) since there's no user in the loop to review it first; it still goes through the normal public-quote/payment flow from there.

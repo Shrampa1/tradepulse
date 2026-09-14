@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { FilePlus, Zap } from "lucide-react-native";
+import { CalendarDays, FilePlus, Zap } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
+import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { QuickActionButton } from "@/components/dashboard/QuickActionButton";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +16,12 @@ type Metrics = {
   profitThisMonth: number;
 };
 
+type TodayJob = {
+  id: string;
+  title: string;
+  starts_at: string;
+};
+
 export default function DashboardScreen() {
   const router = useRouter();
   const [metrics, setMetrics] = useState<Metrics>({
@@ -23,12 +30,16 @@ export default function DashboardScreen() {
     revenueThisMonth: 0,
     profitThisMonth: 0,
   });
+  const [todayJobs, setTodayJobs] = useState<TodayJob[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
       loadMetrics().then((next) => {
         if (isActive) setMetrics(next);
+      });
+      loadTodayJobs().then((next) => {
+        if (isActive) setTodayJobs(next);
       });
       return () => {
         isActive = false;
@@ -69,6 +80,28 @@ export default function DashboardScreen() {
           onPress={() => router.push({ pathname: "/estimates/new", params: { mode: "invoice" } })}
         />
       </View>
+
+      <Pressable onPress={() => router.push("/(tabs)/schedule")}>
+        <Card className="gap-2">
+          <View className="flex-row items-center gap-2">
+            <CalendarDays color="#2563eb" size={18} />
+            <Text className="text-sm font-semibold text-ink">Today's jobs</Text>
+          </View>
+          {todayJobs.length === 0 ? (
+            <Text className="text-sm text-subtle">Nothing scheduled today.</Text>
+          ) : (
+            todayJobs.map((job) => (
+              <Text key={job.id} className="text-sm text-subtle">
+                {new Date(job.starts_at).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}{" "}
+                — {job.title}
+              </Text>
+            ))
+          )}
+        </Card>
+      </Pressable>
     </Screen>
   );
 }
@@ -107,4 +140,20 @@ async function loadMetrics(): Promise<Metrics> {
     revenueThisMonth,
     profitThisMonth: revenueThisMonth - expensesThisMonth,
   };
+}
+
+async function loadTodayJobs(): Promise<TodayJob[]> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+  const { data } = await supabase
+    .from("appointments")
+    .select("id, title, starts_at")
+    .gte("starts_at", startOfToday.toISOString())
+    .lt("starts_at", startOfTomorrow.toISOString())
+    .order("starts_at");
+
+  return data ?? [];
 }

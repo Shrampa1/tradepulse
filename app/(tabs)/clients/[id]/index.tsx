@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { Client, Estimate } from "@/types/database";
+import type { Client, Estimate, RecurringContract } from "@/types/database";
+
+const FREQUENCY_LABEL: Record<string, string> = { weekly: "Weekly", monthly: "Monthly" };
 
 export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [contracts, setContracts] = useState<RecurringContract[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -32,7 +35,12 @@ export default function ClientDetailScreen() {
           .select("*")
           .eq("client_id", id)
           .order("created_at", { ascending: false }),
-      ]).then(([clientRes, estimatesRes]) => {
+        supabase
+          .from("recurring_contracts")
+          .select("*")
+          .eq("client_id", id)
+          .order("created_at", { ascending: false }),
+      ]).then(([clientRes, estimatesRes, contractsRes]) => {
         if (!isActive) return;
         if (clientRes.data) {
           setClient(clientRes.data);
@@ -42,6 +50,7 @@ export default function ClientDetailScreen() {
           setAddress(clientRes.data.address ?? "");
         }
         setEstimates(estimatesRes.data ?? []);
+        setContracts(contractsRes.data ?? []);
       });
       return () => {
         isActive = false;
@@ -105,6 +114,29 @@ export default function ClientDetailScreen() {
             </View>
             <Text className="text-base font-semibold text-ink">{formatCurrency(item.total_amount)}</Text>
           </Pressable>
+        )}
+      />
+
+      <View className="flex-row items-center justify-between">
+        <Text className="text-sm font-semibold text-ink">Recurring contracts</Text>
+        <Pressable onPress={() => router.push(`/(tabs)/clients/${id}/contracts/new`)}>
+          <Text className="text-sm font-semibold text-brand-600">+ New contract</Text>
+        </Pressable>
+      </View>
+      <FlatList
+        data={contracts}
+        scrollEnabled={false}
+        keyExtractor={(item) => item.id}
+        contentContainerClassName="gap-2 pb-4"
+        ListEmptyComponent={<Text className="text-sm text-subtle">No recurring contracts yet.</Text>}
+        renderItem={({ item }) => (
+          <View className="gap-1 rounded-xl border border-border bg-surface p-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-ink">{item.title}</Text>
+              <Text className="text-sm text-subtle">{FREQUENCY_LABEL[item.frequency] ?? item.frequency}</Text>
+            </View>
+            <Text className="text-sm text-subtle">Next invoice {formatDate(item.next_run_at)}</Text>
+          </View>
         )}
       />
     </Screen>
