@@ -13,6 +13,24 @@ export type Profile = {
   phone: string | null;
   payment_account_id: string | null;
   tax_rate: number;
+  mileage_rate: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExpenseKind = "material" | "mileage" | "labor" | "other";
+
+export type Expense = {
+  id: string;
+  user_id: string;
+  estimate_id: string | null;
+  client_id: string | null;
+  kind: ExpenseKind;
+  description: string;
+  amount: number;
+  miles: number | null;
+  receipt_photo_path: string | null;
+  occurred_at: string;
   created_at: string;
   updated_at: string;
 };

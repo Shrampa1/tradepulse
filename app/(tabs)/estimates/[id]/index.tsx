@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Share, Text, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -10,14 +10,16 @@ import { ClientPicker } from "@/components/clients/ClientPicker";
 import { LineItemsEditor } from "@/components/estimates/LineItemsEditor";
 import { supabase } from "@/lib/supabase";
 import { sendEstimateToClient } from "@/lib/api";
-import { formatDate } from "@/lib/format";
-import type { Client, DraftLineItem, Estimate } from "@/types/database";
+import { formatCurrency, formatDate } from "@/lib/format";
+import type { Client, DraftLineItem, Estimate, Expense } from "@/types/database";
 
 export default function EstimateDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [items, setItems] = useState<DraftLineItem[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobAddress, setJobAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
@@ -34,16 +36,20 @@ export default function EstimateDetailScreen() {
       };
 
       async function load() {
-        const { data } = await supabase
-          .from("estimates")
-          .select("*, clients ( * ), line_items ( * )")
-          .eq("id", id)
-          .single();
+        const [{ data }, { data: expenseRows }] = await Promise.all([
+          supabase
+            .from("estimates")
+            .select("*, clients ( * ), line_items ( * )")
+            .eq("id", id)
+            .single(),
+          supabase.from("expenses").select("*").eq("estimate_id", id),
+        ]);
         if (!isActive || !data) return;
 
         const { clients: loadedClient, line_items: loadedItems, ...rest } = data as any;
         setEstimate(rest);
         setClient(loadedClient);
+        setExpenses(expenseRows ?? []);
         setJobAddress(rest.job_address ?? "");
         setDepositAmount(String(rest.deposit_amount ?? 0));
         setItems(
@@ -59,6 +65,9 @@ export default function EstimateDetailScreen() {
       }
     }, [id])
   );
+
+  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const profit = (estimate?.total_amount ?? 0) - totalExpenses;
 
   async function handleSave() {
     if (!estimate) return;
@@ -149,6 +158,23 @@ export default function EstimateDetailScreen() {
         {(publicUrl ?? null) && (
           <Text className="text-xs text-brand-600">{publicUrl}</Text>
         )}
+      </Card>
+
+      <Card className="gap-2">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-sm font-semibold text-ink">Profit</Text>
+          <Text className={`text-lg font-bold ${profit >= 0 ? "text-success" : "text-danger"}`}>
+            {formatCurrency(profit)}
+          </Text>
+        </View>
+        <Text className="text-xs text-subtle">
+          {formatCurrency(estimate.total_amount)} total − {formatCurrency(totalExpenses)} in expenses
+        </Text>
+        <Button
+          label="Add expense"
+          variant="secondary"
+          onPress={() => router.push({ pathname: "/expenses/new", params: { estimateId: estimate.id } })}
+        />
       </Card>
 
       {error && <Text className="text-sm text-danger">{error}</Text>}

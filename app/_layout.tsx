@@ -33,6 +33,10 @@ function RootNavigator() {
         name="clients/new"
         options={{ presentation: "modal", title: "New Client" }}
       />
+      <Stack.Screen
+        name="expenses/new"
+        options={{ presentation: "modal", title: "New Expense" }}
+      />
     </Stack>
   );
 }

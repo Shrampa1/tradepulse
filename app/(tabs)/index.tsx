@@ -12,6 +12,7 @@ type Metrics = {
   pendingQuotes: number;
   unpaidInvoices: number;
   revenueThisMonth: number;
+  profitThisMonth: number;
 };
 
 export default function DashboardScreen() {
@@ -20,6 +21,7 @@ export default function DashboardScreen() {
     pendingQuotes: 0,
     unpaidInvoices: 0,
     revenueThisMonth: 0,
+    profitThisMonth: 0,
   });
 
   useFocusEffect(
@@ -42,11 +44,18 @@ export default function DashboardScreen() {
         <MetricCard label="Pending Quotes" value={String(metrics.pendingQuotes)} />
         <MetricCard label="Unpaid Invoices" value={String(metrics.unpaidInvoices)} accent="warning" />
       </View>
-      <MetricCard
-        label="Revenue This Month"
-        value={formatCurrency(metrics.revenueThisMonth)}
-        accent="success"
-      />
+      <View className="flex-row gap-3">
+        <MetricCard
+          label="Revenue This Month"
+          value={formatCurrency(metrics.revenueThisMonth)}
+          accent="success"
+        />
+        <MetricCard
+          label="Profit This Month"
+          value={formatCurrency(metrics.profitThisMonth)}
+          accent={metrics.profitThisMonth >= 0 ? "success" : "warning"}
+        />
+      </View>
 
       <View className="flex-row gap-3">
         <QuickActionButton
@@ -69,7 +78,7 @@ async function loadMetrics(): Promise<Metrics> {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [pending, unpaid, revenue] = await Promise.all([
+  const [pending, unpaid, revenue, expenses] = await Promise.all([
     supabase.from("estimates").select("id", { count: "exact", head: true }).in("status", ["draft", "sent"]),
     supabase
       .from("estimates")
@@ -80,10 +89,15 @@ async function loadMetrics(): Promise<Metrics> {
       .select("total_amount")
       .eq("status", "paid")
       .gte("paid_at", startOfMonth.toISOString()),
+    supabase.from("expenses").select("amount").gte("occurred_at", startOfMonth.toISOString()),
   ]);
 
   const revenueThisMonth = (revenue.data ?? []).reduce(
     (sum, row) => sum + Number(row.total_amount ?? 0),
+    0
+  );
+  const expensesThisMonth = (expenses.data ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
     0
   );
 
@@ -91,5 +105,6 @@ async function loadMetrics(): Promise<Metrics> {
     pendingQuotes: pending.count ?? 0,
     unpaidInvoices: unpaid.count ?? 0,
     revenueThisMonth,
+    profitThisMonth: revenueThisMonth - expensesThisMonth,
   };
 }

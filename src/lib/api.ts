@@ -33,3 +33,9 @@ export async function parseLineItemsFromPhoto(params: { imageBase64: string; ima
 export async function sendEstimateToClient(estimateId: string) {
   return invoke<{ publicUrl: string }>("send-estimate", { estimateId });
 }
+
+export async function parseReceiptPhoto(params: { imageBase64: string; imageMimeType: string }) {
+  return invoke<{
+    expense: { vendor: string; description: string; amount: number; occurred_at: string | null };
+  }>("parse-receipt", params);
+}
