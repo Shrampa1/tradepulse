@@ -4,11 +4,11 @@ import { AppointmentForm } from "@/components/schedule/AppointmentForm";
 
 export default function NewAppointmentScreen() {
   const router = useRouter();
-  const { estimateId } = useLocalSearchParams<{ estimateId?: string }>();
+  const { date } = useLocalSearchParams<{ date?: string }>();
 
   return (
     <Screen>
-      <AppointmentForm estimateId={estimateId} onSaved={() => router.back()} />
+      <AppointmentForm initialDate={date} onSaved={() => router.back()} />
     </Screen>
   );
 }

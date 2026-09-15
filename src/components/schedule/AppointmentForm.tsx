@@ -3,24 +3,47 @@ import { Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ClientPicker } from "@/components/clients/ClientPicker";
+import { EstimatePicker, type EstimateOption } from "@/components/estimates/EstimatePicker";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, Client } from "@/types/database";
 
 type Props = {
-  estimateId?: string;
+  appointment?: Appointment;
+  initialDate?: string; // YYYY-MM-DD, used when creating from a selected calendar day
+  initialClient?: Client | null;
+  initialEstimate?: EstimateOption | null;
   onSaved: (appointment: Appointment) => void;
 };
 
-export function AppointmentForm({ estimateId, onSaved }: Props) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
-  const [client, setClient] = useState<Client | null>(null);
+export function AppointmentForm({
+  appointment,
+  initialDate,
+  initialClient,
+  initialEstimate,
+  onSaved,
+}: Props) {
+  const isEditing = Boolean(appointment);
+  const [title, setTitle] = useState(appointment?.title ?? "");
+  const [date, setDate] = useState(
+    appointment ? appointment.starts_at.slice(0, 10) : initialDate ?? new Date().toISOString().slice(0, 10)
+  );
+  const [startTime, setStartTime] = useState(appointment ? splitTime(appointment.starts_at) : "09:00");
+  const [endTime, setEndTime] = useState(appointment ? splitTime(appointment.ends_at) : "");
+  const [location, setLocation] = useState(appointment?.location ?? "");
+  const [notes, setNotes] = useState(appointment?.notes ?? "");
+  const [client, setClient] = useState<Client | null>(initialClient ?? null);
+  const [estimate, setEstimate] = useState<EstimateOption | null>(initialEstimate ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  function handlePickEstimate(picked: EstimateOption) {
+    setEstimate(picked);
+    // Estimates only carry the client's name via the join, not a full Client
+    // row, but that's enough for ClientPicker's display + for linking below.
+    if (!client && picked.clients) {
+      setClient({ id: picked.client_id, name: picked.clients.name } as Client);
+    }
+  }
 
   async function handleSave() {
     if (!title.trim()) {
@@ -37,6 +60,32 @@ export function AppointmentForm({ estimateId, onSaved }: Props) {
     setIsSaving(true);
     setError(null);
 
+    const payload = {
+      estimate_id: estimate?.id ?? null,
+      client_id: client?.id ?? null,
+      title: title.trim(),
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt ? endsAt.toISOString() : null,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+    };
+
+    if (isEditing && appointment) {
+      const { data, error: updateError } = await supabase
+        .from("appointments")
+        .update(payload)
+        .eq("id", appointment.id)
+        .select()
+        .single();
+      setIsSaving(false);
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      onSaved(data as Appointment);
+      return;
+    }
+
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
       setError("You must be signed in.");
@@ -46,16 +95,7 @@ export function AppointmentForm({ estimateId, onSaved }: Props) {
 
     const { data, error: insertError } = await supabase
       .from("appointments")
-      .insert({
-        user_id: userData.user.id,
-        estimate_id: estimateId ?? null,
-        client_id: client?.id ?? null,
-        title: title.trim(),
-        starts_at: startsAt.toISOString(),
-        ends_at: endsAt ? endsAt.toISOString() : null,
-        location: location.trim() || null,
-        notes: notes.trim() || null,
-      })
+      .insert({ ...payload, user_id: userData.user.id })
       .select()
       .single();
 
@@ -86,17 +126,30 @@ export function AppointmentForm({ estimateId, onSaved }: Props) {
       <Input label="Location" value={location} onChangeText={setLocation} placeholder="123 Main St" />
       <Input label="Notes" value={notes} onChangeText={setNotes} multiline />
 
-      {!estimateId && (
-        <View className="gap-1.5">
-          <Text className="text-sm font-medium text-ink">Client (optional)</Text>
-          <ClientPicker value={client} onChange={setClient} />
-        </View>
-      )}
+      <View className="gap-1.5">
+        <Text className="text-sm font-medium text-ink">Client (optional)</Text>
+        <ClientPicker value={client} onChange={setClient} />
+      </View>
+
+      <View className="gap-1.5">
+        <Text className="text-sm font-medium text-ink">Linked estimate (optional)</Text>
+        <EstimatePicker value={estimate} onChange={handlePickEstimate} />
+      </View>
 
       {error && <Text className="text-sm text-danger">{error}</Text>}
-      <Button label="Save appointment" onPress={handleSave} loading={isSaving} />
+      <Button
+        label={isEditing ? "Save changes" : "Save appointment"}
+        onPress={handleSave}
+        loading={isSaving}
+      />
     </View>
   );
+}
+
+function splitTime(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function combineDateAndTime(date: string, time: string): Date | null {
