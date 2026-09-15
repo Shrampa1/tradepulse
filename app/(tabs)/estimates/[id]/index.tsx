@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Share, Text, View } from "react-native";
+import { Pressable, Share, Text, View } from "react-native";
+import { randomUUID } from "expo-crypto";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { Card } from "@/components/ui/Card";
@@ -11,7 +12,18 @@ import { LineItemsEditor } from "@/components/estimates/LineItemsEditor";
 import { supabase } from "@/lib/supabase";
 import { sendEstimateToClient } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { Client, DraftLineItem, Estimate, Expense } from "@/types/database";
+import type {
+  Client,
+  DraftLineItem,
+  Estimate,
+  EstimateDiscountType,
+  Expense,
+} from "@/types/database";
+
+const DISCOUNT_TYPES: { value: EstimateDiscountType; label: string }[] = [
+  { value: "fixed", label: "$ Fixed" },
+  { value: "percent", label: "% Percent" },
+];
 
 export default function EstimateDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +34,8 @@ export default function EstimateDetailScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobAddress, setJobAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("0");
+  const [discountType, setDiscountType] = useState<EstimateDiscountType>("fixed");
+  const [discountValue, setDiscountValue] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +66,8 @@ export default function EstimateDetailScreen() {
         setExpenses(expenseRows ?? []);
         setJobAddress(rest.job_address ?? "");
         setDepositAmount(String(rest.deposit_amount ?? 0));
+        setDiscountType(rest.discount_type ?? "fixed");
+        setDiscountValue(String(rest.discount_value ?? 0));
         setItems(
           (loadedItems ?? [])
             .sort((a: any, b: any) => a.sort_order - b.sort_order)
@@ -80,6 +96,8 @@ export default function EstimateDetailScreen() {
         client_id: client?.id ?? null,
         job_address: jobAddress || null,
         deposit_amount: toNumber(depositAmount),
+        discount_type: discountType,
+        discount_value: toNumber(discountValue),
       })
       .eq("id", estimate.id);
 
@@ -101,6 +119,18 @@ export default function EstimateDetailScreen() {
     setIsSaving(false);
     const firstError = updateError ?? deleteError ?? insertError;
     if (firstError) setError(firstError.message);
+  }
+
+  function billExpenseToInvoice(expense: Expense) {
+    setItems((current) => [
+      ...current,
+      {
+        id: randomUUID(),
+        description: `Reimbursed: ${expense.description}`,
+        quantity: 1,
+        unit_price: Number(expense.amount),
+      },
+    ]);
   }
 
   async function handleSend() {
@@ -142,7 +172,36 @@ export default function EstimateDetailScreen() {
 
       <Card className="gap-3">
         <Text className="text-sm font-semibold text-ink">Line items</Text>
-        <LineItemsEditor items={items} taxRate={estimate.tax_rate} onChange={setItems} />
+        <LineItemsEditor
+          items={items}
+          taxRate={estimate.tax_rate}
+          discount={{ type: discountType, value: toNumber(discountValue) }}
+          onChange={setItems}
+        />
+      </Card>
+
+      <Card className="gap-3">
+        <Text className="text-sm font-semibold text-ink">Discount</Text>
+        <View className="flex-row gap-2">
+          {DISCOUNT_TYPES.map((option) => (
+            <Pressable
+              key={option.value}
+              onPress={() => setDiscountType(option.value)}
+              className={`rounded-full border px-3.5 py-2 ${
+                discountType === option.value ? "border-brand-600 bg-brand-50" : "border-border bg-surface"
+              }`}
+            >
+              <Text
+                className={`text-sm font-medium ${
+                  discountType === option.value ? "text-brand-600" : "text-subtle"
+                }`}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Input label="Amount" value={discountValue} onChangeText={setDiscountValue} keyboardType="decimal-pad" />
       </Card>
 
       <Card className="gap-3">
@@ -170,6 +229,25 @@ export default function EstimateDetailScreen() {
         <Text className="text-xs text-subtle">
           {formatCurrency(estimate.total_amount)} total − {formatCurrency(totalExpenses)} in expenses
         </Text>
+
+        {expenses.map((expense) => (
+          <View
+            key={expense.id}
+            className="flex-row items-center justify-between rounded-xl border border-border bg-muted px-3 py-2"
+          >
+            <View className="flex-1 pr-2">
+              <Text className="text-sm text-ink">{expense.description}</Text>
+              <Text className="text-xs text-subtle">{formatCurrency(Number(expense.amount))}</Text>
+            </View>
+            <Pressable
+              onPress={() => billExpenseToInvoice(expense)}
+              className="rounded-lg border border-brand-600 px-2.5 py-1.5"
+            >
+              <Text className="text-xs font-semibold text-brand-600">Bill to invoice</Text>
+            </Pressable>
+          </View>
+        ))}
+
         <Button
           label="Add expense"
           variant="secondary"

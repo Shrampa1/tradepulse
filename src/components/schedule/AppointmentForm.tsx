@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { NativePickerField } from "@/components/ui/NativePickerField";
 import { ClientPicker } from "@/components/clients/ClientPicker";
 import { EstimatePicker, type EstimateOption } from "@/components/estimates/EstimatePicker";
 import { supabase } from "@/lib/supabase";
@@ -43,6 +44,12 @@ export function AppointmentForm({
     if (!client && picked.clients) {
       setClient({ id: picked.client_id, name: picked.clients.name } as Client);
     }
+  }
+
+  function handlePickClient(picked: Client) {
+    setClient(picked);
+    // Only prefill — never clobber a location the user already typed.
+    if (!location && picked.address) setLocation(picked.address);
   }
 
   async function handleSave() {
@@ -111,15 +118,13 @@ export function AppointmentForm({
     <View className="gap-3">
       <Input label="Title" value={title} onChangeText={setTitle} placeholder="Fence repair" />
 
+      <NativePickerField label="Date" mode="date" value={date} onChange={setDate} />
       <View className="flex-row gap-3">
         <View className="flex-1">
-          <Input label="Date" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+          <NativePickerField label="Start time" mode="time" value={startTime} onChange={setStartTime} />
         </View>
         <View className="flex-1">
-          <Input label="Start time" value={startTime} onChangeText={setStartTime} placeholder="09:00" />
-        </View>
-        <View className="flex-1">
-          <Input label="End time" value={endTime} onChangeText={setEndTime} placeholder="11:00" />
+          <NativePickerField label="End time" mode="time" value={endTime} onChange={setEndTime} />
         </View>
       </View>
 
@@ -128,7 +133,7 @@ export function AppointmentForm({
 
       <View className="gap-1.5">
         <Text className="text-sm font-medium text-ink">Client (optional)</Text>
-        <ClientPicker value={client} onChange={setClient} />
+        <ClientPicker value={client} onChange={handlePickClient} />
       </View>
 
       <View className="gap-1.5">
@@ -152,7 +157,7 @@ function splitTime(iso: string | null) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function combineDateAndTime(date: string, time: string): Date | null {
+export function combineDateAndTime(date: string, time: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
   const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
   if (!match || !timeMatch) return null;

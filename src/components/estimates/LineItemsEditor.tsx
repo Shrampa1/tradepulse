@@ -3,17 +3,18 @@ import { Trash2, Plus } from "lucide-react-native";
 import { Pressable } from "react-native";
 import { randomUUID } from "expo-crypto";
 import type { DraftLineItem } from "@/types/database";
-import { estimateTotals, lineItemTotal } from "@/lib/calculations";
+import { estimateTotals, lineItemTotal, type Discount } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 
 type Props = {
   items: DraftLineItem[];
   taxRate: number;
+  discount?: Discount;
   onChange: (items: DraftLineItem[]) => void;
 };
 
-export function LineItemsEditor({ items, taxRate, onChange }: Props) {
-  const totals = estimateTotals(items, taxRate);
+export function LineItemsEditor({ items, taxRate, discount, onChange }: Props) {
+  const totals = estimateTotals(items, taxRate, discount);
 
   function updateItem(id: string, patch: Partial<DraftLineItem>) {
     onChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -86,6 +87,7 @@ export function LineItemsEditor({ items, taxRate, onChange }: Props) {
 
       <View className="gap-1.5 rounded-xl bg-muted p-3">
         <SummaryRow label="Subtotal" value={totals.subtotal} />
+        {totals.discount > 0 && <SummaryRow label="Discount" value={-totals.discount} />}
         <SummaryRow label={`Tax (${(taxRate * 100).toFixed(2)}%)`} value={totals.tax} />
         <View className="mt-1 flex-row justify-between border-t border-border pt-1.5">
           <Text className="text-base font-bold text-ink">Total</Text>

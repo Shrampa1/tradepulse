@@ -22,6 +22,7 @@ type Props = {
 
 export function ExpenseForm({ estimateId, onSaved }: Props) {
   const [kind, setKind] = useState<ExpenseKind>("material");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("0");
   const [miles, setMiles] = useState("0");
@@ -74,6 +75,7 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
         estimate_id: estimateId ?? null,
         client_id: client?.id ?? null,
         kind,
+        category: category.trim() || null,
         description: description.trim(),
         amount: finalAmount,
         miles: kind === "mileage" ? toNumber(miles) : null,
@@ -116,6 +118,13 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
           ))}
         </View>
       </Card>
+
+      <Input
+        label="Custom label (optional)"
+        value={category}
+        onChangeText={setCategory}
+        placeholder="e.g. Permits, Subcontractor, Fuel"
+      />
 
       <Input
         label="Description"

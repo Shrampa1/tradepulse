@@ -82,7 +82,7 @@ export default function ExpensesListScreen() {
               <Text className="text-base font-semibold text-ink">{formatCurrency(Number(item.amount))}</Text>
             </View>
             <Text className="text-sm text-subtle">
-              {KIND_LABEL[item.kind] ?? item.kind} · {formatDate(item.occurred_at)}
+              {item.category || KIND_LABEL[item.kind] || item.kind} · {formatDate(item.occurred_at)}
             </Text>
           </View>
         )}

@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("business_name, phone")
+    .select("business_name, business_tagline, business_address, phone, business_fax")
     .eq("user_id", estimate.user_id)
     .single();
 
@@ -100,6 +100,8 @@ function renderPage(estimate: any, profile: any, token: string) {
   .wrap { max-width: 480px; margin: 0 auto; padding: 20px 16px 48px; }
   h1 { font-size: 20px; margin: 4px 0 0; }
   .muted { color: #64748b; font-size: 13px; }
+  .letterhead { margin-bottom: 4px; }
+  .business-name { font-size: 16px; font-weight: 700; }
   .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; margin-top: 16px; }
   .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -117,7 +119,15 @@ function renderPage(estimate: any, profile: any, token: string) {
 </head>
 <body>
 <div class="wrap">
-  <div class="muted">${escapeHtml(profile?.business_name || "")}</div>
+  <div class="letterhead">
+    <div class="business-name">${escapeHtml(profile?.business_name || "")}</div>
+    ${profile?.business_tagline ? `<div class="muted">${escapeHtml(profile.business_tagline)}</div>` : ""}
+    ${profile?.business_address ? `<div class="muted">${escapeHtml(profile.business_address)}</div>` : ""}
+    ${[profile?.phone, profile?.business_fax ? `Fax: ${profile.business_fax}` : null]
+      .filter(Boolean)
+      .map((line) => `<div class="muted">${escapeHtml(String(line))}</div>`)
+      .join("")}
+  </div>
   <h1>Quote for ${escapeHtml(estimate.clients?.name || "you")}</h1>
   <span class="badge">${escapeHtml(statusLabel(estimate.status))}</span>
 
@@ -136,6 +146,11 @@ function renderPage(estimate: any, profile: any, token: string) {
     </table>
     <table class="totals">
       <tr><td class="muted">Subtotal</td><td class="num">${money(estimate.subtotal_amount)}</td></tr>
+      ${
+        estimate.discount_amount > 0
+          ? `<tr><td class="muted">Discount</td><td class="num">−${money(estimate.discount_amount)}</td></tr>`
+          : ""
+      }
       <tr><td class="muted">Tax</td><td class="num">${money(estimate.tax_amount)}</td></tr>
       <tr class="grand"><td>Total</td><td class="num">${money(estimate.total_amount)}</td></tr>
     </table>

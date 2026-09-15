@@ -10,6 +10,9 @@ export type Profile = {
   id: string;
   user_id: string;
   business_name: string;
+  business_tagline: string | null;
+  business_address: string | null;
+  business_fax: string | null;
   phone: string | null;
   payment_account_id: string | null;
   tax_rate: number;
@@ -57,6 +60,7 @@ export type Expense = {
   estimate_id: string | null;
   client_id: string | null;
   kind: ExpenseKind;
+  category: string | null;
   description: string;
   amount: number;
   miles: number | null;
@@ -88,6 +92,8 @@ export type LineItem = {
   created_at: string;
 };
 
+export type EstimateDiscountType = "fixed" | "percent";
+
 export type Estimate = {
   id: string;
   user_id: string;
@@ -96,6 +102,9 @@ export type Estimate = {
   job_address: string | null;
   notes: string | null;
   subtotal_amount: number;
+  discount_type: EstimateDiscountType;
+  discount_value: number;
+  discount_amount: number;
   tax_rate: number;
   tax_amount: number;
   total_amount: number;

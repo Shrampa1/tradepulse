@@ -39,3 +39,9 @@ export async function parseReceiptPhoto(params: { imageBase64: string; imageMime
     expense: { vendor: string; description: string; amount: number; occurred_at: string | null };
   }>("parse-receipt", params);
 }
+
+export async function parseAppointmentFromVoice(params: { audioBase64: string; audioMimeType: string }) {
+  return invoke<{
+    appointment: { title: string; date: string; time: string; location: string | null };
+  }>("parse-appointment", params);
+}

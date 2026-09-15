@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { CalendarDays, FilePlus, Zap } from "lucide-react-native";
+import { CalendarDays, FilePlus, Settings, Zap } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
@@ -49,7 +49,12 @@ export default function DashboardScreen() {
 
   return (
     <Screen>
-      <Text className="mt-2 text-2xl font-bold text-ink">Dashboard</Text>
+      <View className="mt-2 flex-row items-center justify-between">
+        <Text className="text-2xl font-bold text-ink">Dashboard</Text>
+        <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
+          <Settings color="#64748b" size={22} />
+        </Pressable>
+      </View>
 
       <View className="flex-row gap-3">
         <MetricCard label="Pending Quotes" value={String(metrics.pendingQuotes)} />
