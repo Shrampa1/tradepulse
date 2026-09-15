@@ -76,7 +76,10 @@ export default function ExpensesListScreen() {
           </View>
         )}
         renderItem={({ item }) => (
-          <View className="gap-1 rounded-2xl border border-border bg-surface p-4">
+          <Pressable
+            onPress={() => router.push(`/expenses/${item.id}`)}
+            className="gap-1 rounded-2xl border border-border bg-surface p-4"
+          >
             <View className="flex-row items-center justify-between">
               <Text className="flex-1 text-base font-semibold text-ink">{item.description}</Text>
               <Text className="text-base font-semibold text-ink">{formatCurrency(Number(item.amount))}</Text>
@@ -84,7 +87,7 @@ export default function ExpensesListScreen() {
             <Text className="text-sm text-subtle">
               {item.category || KIND_LABEL[item.kind] || item.kind} · {formatDate(item.occurred_at)}
             </Text>
-          </View>
+          </Pressable>
         )}
       />
     </Screen>

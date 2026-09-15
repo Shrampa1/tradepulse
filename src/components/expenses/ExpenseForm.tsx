@@ -17,19 +17,24 @@ const KINDS: { value: ExpenseKind; label: string }[] = [
 ];
 
 type Props = {
+  expense?: Expense;
   estimateId?: string;
+  initialClient?: Client | null;
   onSaved: (expense: Expense) => void;
 };
 
-export function ExpenseForm({ estimateId, onSaved }: Props) {
-  const [kind, setKind] = useState<ExpenseKind>("material");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("0");
-  const [miles, setMiles] = useState("0");
+export function ExpenseForm({ expense, estimateId, initialClient, onSaved }: Props) {
+  const isEditing = Boolean(expense);
+  const [kind, setKind] = useState<ExpenseKind>(expense?.kind ?? "material");
+  const [category, setCategory] = useState(expense?.category ?? "");
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [amount, setAmount] = useState(String(expense?.amount ?? 0));
+  const [miles, setMiles] = useState(String(expense?.miles ?? 0));
   const [mileageRate, setMileageRate] = useState(0.67);
-  const [occurredAt, setOccurredAt] = useState(() => new Date().toISOString().slice(0, 10));
-  const [client, setClient] = useState<Client | null>(null);
+  const [occurredAt, setOccurredAt] = useState(
+    expense ? expense.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+  const [client, setClient] = useState<Client | null>(initialClient ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -60,6 +65,33 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
     setIsSaving(true);
     setError(null);
 
+    const finalAmount = kind === "mileage" ? computedMileageAmount : toNumber(amount);
+    const payload = {
+      client_id: client?.id ?? null,
+      kind,
+      category: category.trim() || null,
+      description: description.trim(),
+      amount: finalAmount,
+      miles: kind === "mileage" ? toNumber(miles) : null,
+      occurred_at: new Date(occurredAt).toISOString(),
+    };
+
+    if (isEditing && expense) {
+      const { data, error: updateError } = await supabase
+        .from("expenses")
+        .update(payload)
+        .eq("id", expense.id)
+        .select()
+        .single();
+      setIsSaving(false);
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      onSaved(data as Expense);
+      return;
+    }
+
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
       setError("You must be signed in.");
@@ -67,21 +99,9 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
       return;
     }
 
-    const finalAmount = kind === "mileage" ? computedMileageAmount : toNumber(amount);
-
     const { data, error: insertError } = await supabase
       .from("expenses")
-      .insert({
-        user_id: userData.user.id,
-        estimate_id: estimateId ?? null,
-        client_id: client?.id ?? null,
-        kind,
-        category: category.trim() || null,
-        description: description.trim(),
-        amount: finalAmount,
-        miles: kind === "mileage" ? toNumber(miles) : null,
-        occurred_at: new Date(occurredAt).toISOString(),
-      })
+      .insert({ ...payload, user_id: userData.user.id, estimate_id: estimateId ?? null })
       .select()
       .single();
 
@@ -156,7 +176,7 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
       )}
 
       {error && <Text className="text-sm text-danger">{error}</Text>}
-      <Button label="Save expense" onPress={handleSave} loading={isSaving} />
+      <Button label={isEditing ? "Save changes" : "Save expense"} onPress={handleSave} loading={isSaving} />
     </View>
   );
 }

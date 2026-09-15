@@ -55,6 +55,7 @@ function RootNavigator() {
         name="expenses/new"
         options={{ presentation: "modal", title: "New Expense" }}
       />
+      <Stack.Screen name="expenses/[id]" options={{ title: "Expense" }} />
       <Stack.Screen
         name="appointments/new"
         options={{ presentation: "modal", title: "New Appointment" }}

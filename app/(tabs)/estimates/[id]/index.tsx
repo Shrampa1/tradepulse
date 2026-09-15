@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Linking, Pressable, Share, Text, View } from "react-native";
+import { Linking, Platform, Pressable, Share, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -14,6 +14,7 @@ import { LineItemsEditor } from "@/components/estimates/LineItemsEditor";
 import { supabase } from "@/lib/supabase";
 import { sendEstimateToClient } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { confirmAsync } from "@/lib/confirm";
 import type {
   Client,
   DraftLineItem,
@@ -42,6 +43,7 @@ export default function EstimateDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
 
@@ -139,6 +141,23 @@ export default function EstimateDetailScreen() {
     ]);
   }
 
+  async function handleDelete() {
+    if (!estimate) return;
+    const confirmed = await confirmAsync(
+      "This permanently deletes the estimate and its line items. This can't be undone."
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    const { error: deleteError } = await supabase.from("estimates").delete().eq("id", estimate.id);
+    setIsDeleting(false);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    router.back();
+  }
+
   function quoteUrl() {
     if (!estimate) return null;
     return `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/public-quote?token=${estimate.public_token}`;
@@ -146,12 +165,25 @@ export default function EstimateDetailScreen() {
 
   function handlePreview() {
     const url = quoteUrl();
-    if (url) Linking.openURL(url);
+    if (!url) return;
+    // On web, Linking.openURL can navigate the current (possibly sandboxed
+    // preview-iframe) tab instead of opening a real new one — window.open
+    // with an explicit target reliably escapes that.
+    if (Platform.OS === "web") window.open(url, "_blank", "noopener,noreferrer");
+    else Linking.openURL(url);
   }
 
   async function handleDownloadPdf() {
     const url = quoteUrl();
     if (!url) return;
+    // expo-print's web implementation doesn't support converting an
+    // arbitrary remote uri to a file (printToFileAsync resolves to
+    // undefined there) — on web, opening the page in a new tab is enough
+    // for the browser's own Print > Save as PDF to work.
+    if (Platform.OS === "web") {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setIsPreparingPdf(true);
     setError(null);
     try {
@@ -272,10 +304,10 @@ export default function EstimateDetailScreen() {
             key={expense.id}
             className="flex-row items-center justify-between rounded-xl border border-border bg-muted px-3 py-2"
           >
-            <View className="flex-1 pr-2">
+            <Pressable className="flex-1 pr-2" onPress={() => router.push(`/expenses/${expense.id}`)}>
               <Text className="text-sm text-ink">{expense.description}</Text>
               <Text className="text-xs text-subtle">{formatCurrency(Number(expense.amount))}</Text>
-            </View>
+            </Pressable>
             <Pressable
               onPress={() => billExpenseToInvoice(expense)}
               className="rounded-lg border border-brand-600 px-2.5 py-1.5"
@@ -311,6 +343,7 @@ export default function EstimateDetailScreen() {
       <View className="gap-2 pb-4">
         <Button label="Send to client" onPress={handleSend} loading={isSending} />
         <Button label="Save changes" variant="secondary" onPress={handleSave} loading={isSaving} />
+        <Button label="Delete estimate" variant="destructive" onPress={handleDelete} loading={isDeleting} />
       </View>
     </Screen>
   );

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { confirmAsync } from "@/lib/confirm";
 import type { Client, Estimate, RecurringContract } from "@/types/database";
 
 const FREQUENCY_LABEL: Record<string, string> = { weekly: "Weekly", monthly: "Monthly" };
@@ -23,6 +24,7 @@ export default function ClientDetailScreen() {
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
@@ -75,6 +77,23 @@ export default function ClientDetailScreen() {
     if (updateError) setError(updateError.message);
   }
 
+  async function handleDelete() {
+    if (!client) return;
+    const confirmed = await confirmAsync(
+      "This permanently deletes the client. Their estimates and invoices are kept but unlinked from any client."
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    const { error: deleteError } = await supabase.from("clients").delete().eq("id", client.id);
+    setIsDeleting(false);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    router.back();
+  }
+
   if (!client) {
     return (
       <Screen>
@@ -94,6 +113,7 @@ export default function ClientDetailScreen() {
         <Input label="Address" value={address} onChangeText={setAddress} />
         {error && <Text className="text-sm text-danger">{error}</Text>}
         <Button label="Save" onPress={handleSave} loading={isSaving} />
+        <Button label="Delete client" variant="destructive" onPress={handleDelete} loading={isDeleting} />
       </Card>
 
       <Text className="text-sm font-semibold text-ink">Estimates & invoices</Text>
