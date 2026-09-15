@@ -34,10 +34,14 @@ export async function sendEstimateToClient(estimateId: string) {
   return invoke<{ publicUrl: string }>("send-estimate", { estimateId });
 }
 
+type ParsedExpense = { vendor: string; description: string; amount: number; occurred_at: string | null };
+
 export async function parseReceiptPhoto(params: { imageBase64: string; imageMimeType: string }) {
-  return invoke<{
-    expense: { vendor: string; description: string; amount: number; occurred_at: string | null };
-  }>("parse-receipt", params);
+  return invoke<{ expense: ParsedExpense }>("parse-receipt", params);
+}
+
+export async function parseExpenseFromVoice(params: { audioBase64: string; audioMimeType: string }) {
+  return invoke<{ expense: ParsedExpense }>("parse-receipt", params);
 }
 
 export async function parseAppointmentFromVoice(params: { audioBase64: string; audioMimeType: string }) {

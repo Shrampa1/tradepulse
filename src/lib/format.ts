@@ -1,12 +1,18 @@
-// Must match SAFEPAY_CURRENCY (an edge function secret, so it can't be read
-// directly from here) — the app only displays amounts, Safepay is what
-// actually charges them, so keep the two in sync by hand if you change either.
-const CURRENCY = process.env.EXPO_PUBLIC_CURRENCY ?? "PKR";
+// The app's own display currency (profiles.currency, editable in Settings).
+// Deliberately separate from SAFEPAY_CURRENCY (an edge function secret) —
+// that's what Safepay actually charges, and public-quote.ts stays driven by
+// it directly rather than this value, so the two must be kept in sync by
+// hand if you change either (a display/charge mismatch would be a real bug).
+let currentCurrency = process.env.EXPO_PUBLIC_CURRENCY ?? "USD";
+
+export function setCurrentCurrency(code: string) {
+  currentCurrency = code;
+}
 
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: CURRENCY,
+    currency: currentCurrency,
   }).format(amount);
 }
 

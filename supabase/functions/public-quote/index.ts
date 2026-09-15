@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("business_name, business_tagline, business_address, phone, business_fax")
+    .select("business_name, business_tagline, business_address, phone, business_fax, custom_invoice_fields")
     .eq("user_id", estimate.user_id)
     .single();
 
@@ -92,7 +92,7 @@ function renderPage(estimate: any, profile: any, token: string) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(profile?.business_name || "Quote")} — Quote</title>
+<title>${escapeHtml(profile?.business_name || "Quote")} - Quote</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -127,9 +127,14 @@ function renderPage(estimate: any, profile: any, token: string) {
       .filter(Boolean)
       .map((line) => `<div class="muted">${escapeHtml(String(line))}</div>`)
       .join("")}
+    ${((profile?.custom_invoice_fields ?? []) as Array<{ label: string; value: string }>)
+      .filter((field) => field.label && field.value)
+      .map((field) => `<div class="muted">${escapeHtml(field.label)}: ${escapeHtml(field.value)}</div>`)
+      .join("")}
   </div>
   <h1>Quote for ${escapeHtml(estimate.clients?.name || "you")}</h1>
   <span class="badge">${escapeHtml(statusLabel(estimate.status))}</span>
+  ${estimate.invoice_number ? `<div class="muted">#${escapeHtml(estimate.invoice_number)}</div>` : ""}
 
   <div class="card">
     <table>
@@ -137,7 +142,7 @@ function renderPage(estimate: any, profile: any, token: string) {
         ${lineItems
           .map(
             (item: any) => `<tr>
-          <td>${escapeHtml(item.description)}<div class="muted">${Number(item.quantity)} × ${money(item.unit_price)}</div></td>
+          <td>${escapeHtml(item.description)}<div class="muted">${Number(item.quantity)} x ${money(item.unit_price)}</div></td>
           <td class="num">${money(item.total)}</td>
         </tr>`
           )
@@ -148,7 +153,7 @@ function renderPage(estimate: any, profile: any, token: string) {
       <tr><td class="muted">Subtotal</td><td class="num">${money(estimate.subtotal_amount)}</td></tr>
       ${
         estimate.discount_amount > 0
-          ? `<tr><td class="muted">Discount</td><td class="num">−${money(estimate.discount_amount)}</td></tr>`
+          ? `<tr><td class="muted">Discount</td><td class="num">-${money(estimate.discount_amount)}</td></tr>`
           : ""
       }
       <tr><td class="muted">Tax</td><td class="num">${money(estimate.tax_amount)}</td></tr>
@@ -156,11 +161,17 @@ function renderPage(estimate: any, profile: any, token: string) {
     </table>
   </div>
 
+  ${
+    estimate.notes
+      ? `<div class="card"><div class="muted" style="margin-bottom:4px;">Notes</div>${escapeHtml(estimate.notes)}</div>`
+      : ""
+  }
+
   <div class="card">
     <div class="muted" style="margin-bottom:8px;">Sign to approve this ${estimate.deposit_amount > 0 ? "quote" : "invoice"}</div>
     ${
       isSigned
-        ? '<div class="banner">Signed ✓</div>'
+        ? '<div class="banner">Signed</div>'
         : `<canvas id="sig" width="600" height="280"></canvas>
     <div class="row">
       <button id="clear">Clear</button>
@@ -171,16 +182,16 @@ function renderPage(estimate: any, profile: any, token: string) {
 
   ${
     showDepositButton
-      ? `<button class="pay" id="pay-deposit">Pay deposit — ${money(estimate.deposit_amount)}</button>`
+      ? `<button class="pay" id="pay-deposit">Pay deposit - ${money(estimate.deposit_amount)}</button>`
       : ""
   }
   ${
     showBalanceButton
-      ? `<button class="pay" id="pay-balance">Pay balance — ${money(estimate.total_amount)}</button>`
+      ? `<button class="pay" id="pay-balance">Pay balance - ${money(estimate.total_amount)}</button>`
       : ""
   }
-  ${estimate.status === "deposit_paid" ? '<div class="banner">Deposit received — thank you!</div>' : ""}
-  ${estimate.status === "paid" ? '<div class="banner">Paid in full — thank you!</div>' : ""}
+  ${estimate.status === "deposit_paid" ? '<div class="banner">Deposit received - thank you!</div>' : ""}
+  ${estimate.status === "paid" ? '<div class="banner">Paid in full - thank you!</div>' : ""}
 </div>
 
 <script>
@@ -213,7 +224,7 @@ function renderPage(estimate: any, profile: any, token: string) {
     document.getElementById('clear').addEventListener('click', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
     document.getElementById('save').addEventListener('click', async (e) => {
       e.target.disabled = true;
-      e.target.textContent = 'Saving…';
+      e.target.textContent = 'Saving...';
       const signatureDataUrl = canvas.toDataURL('image/png');
       const res = await fetch(window.location.pathname + '?token=' + encodeURIComponent(token), {
         method: 'POST',
@@ -228,7 +239,7 @@ function renderPage(estimate: any, profile: any, token: string) {
   async function pay(kind, buttonId) {
     const btn = document.getElementById(buttonId);
     btn.disabled = true;
-    btn.textContent = 'Redirecting to secure checkout…';
+    btn.textContent = 'Redirecting to secure checkout...';
     try {
       const res = await fetch(functionsBase + '/create-deposit-session', {
         method: 'POST',
@@ -239,7 +250,7 @@ function renderPage(estimate: any, profile: any, token: string) {
       if (data.checkoutUrl) window.location.href = data.checkoutUrl;
       else { alert(data.error || 'Could not start checkout.'); btn.disabled = false; }
     } catch {
-      alert('Network error — please try again.');
+      alert('Network error - please try again.');
       btn.disabled = false;
     }
   }

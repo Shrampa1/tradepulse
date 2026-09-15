@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ClientPicker } from "@/components/clients/ClientPicker";
 import { ReceiptCapture } from "@/components/expenses/ReceiptCapture";
+import { VoiceExpenseCapture } from "@/components/expenses/VoiceExpenseCapture";
 import { supabase } from "@/lib/supabase";
 import type { Client, Expense, ExpenseKind } from "@/types/database";
 
@@ -42,7 +43,7 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
       });
   }, []);
 
-  function applyScannedReceipt(receipt: { vendor: string; description: string; amount: number; occurred_at: string | null }) {
+  function applyParsedExpense(receipt: { vendor: string; description: string; amount: number; occurred_at: string | null }) {
     setKind("material");
     setDescription(receipt.vendor ? `${receipt.vendor} — ${receipt.description}` : receipt.description);
     setAmount(String(receipt.amount));
@@ -94,7 +95,8 @@ export function ExpenseForm({ estimateId, onSaved }: Props) {
 
   return (
     <View className="gap-3">
-      {kind === "material" && <ReceiptCapture onParsed={applyScannedReceipt} />}
+      {kind === "material" && <ReceiptCapture onParsed={applyParsedExpense} />}
+      <VoiceExpenseCapture onParsed={applyParsedExpense} />
 
       <Card className="gap-3">
         <Text className="text-sm font-semibold text-ink">Type</Text>

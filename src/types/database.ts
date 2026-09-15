@@ -6,6 +6,8 @@ export type EstimateStatus =
   | "paid"
   | "overdue";
 
+export type CustomInvoiceField = { label: string; value: string };
+
 export type Profile = {
   id: string;
   user_id: string;
@@ -13,6 +15,12 @@ export type Profile = {
   business_tagline: string | null;
   business_address: string | null;
   business_fax: string | null;
+  custom_invoice_fields: CustomInvoiceField[];
+  invoice_number_prefix: string;
+  next_invoice_number: number;
+  default_payment_terms_days: number;
+  currency: string;
+  full_name: string | null;
   phone: string | null;
   payment_account_id: string | null;
   tax_rate: number;
@@ -116,6 +124,7 @@ export type Estimate = {
   deposit_paid_at: string | null;
   paid_at: string | null;
   due_at: string | null;
+  invoice_number: string | null;
   created_at: string;
   updated_at: string;
 };

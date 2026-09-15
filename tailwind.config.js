@@ -15,11 +15,14 @@ module.exports = {
           600: "#1d4ed8",
           700: "#1e40af",
         },
-        surface: "#ffffff",
-        muted: "#f1f5f9",
-        border: "#e2e8f0",
-        ink: "#0f172a",
-        subtle: "#64748b",
+        // Space-separated RGB CSS variables (defined in src/global.css, with
+        // a `.dark:root` override) so these four tokens follow the app's
+        // light/dark theme everywhere they're already used.
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        muted: "rgb(var(--color-muted) / <alpha-value>)",
+        border: "rgb(var(--color-border) / <alpha-value>)",
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        subtle: "rgb(var(--color-subtle) / <alpha-value>)",
         success: "#16a34a",
         warning: "#d97706",
         danger: "#dc2626",

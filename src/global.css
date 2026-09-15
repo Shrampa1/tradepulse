@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark mode theming: every screen already uses semantic color names
+   (bg-surface, text-ink, etc.) rather than raw hex, so re-pointing those
+   names at CSS variables here — instead of a literal hex in
+   tailwind.config.js — covers the whole app without editing every
+   component file. Toggled by nativewind's setColorScheme(), which adds/
+   removes the "dark" class this selector matches. */
+:root {
+  --color-surface: 255 255 255;
+  --color-muted: 241 245 249;
+  --color-border: 226 232 240;
+  --color-ink: 15 23 42;
+  --color-subtle: 100 116 139;
+}
+
+/* Plain `.dark` (not `.dark:root`) so this applies regardless of which
+   element nativewind's "class" strategy actually adds the class to — custom
+   properties inherit to descendants either way. */
+.dark {
+  --color-surface: 30 41 59;
+  --color-muted: 15 23 42;
+  --color-border: 51 65 85;
+  --color-ink: 241 245 249;
+  --color-subtle: 148 163 184;
+}

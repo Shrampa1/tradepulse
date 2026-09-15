@@ -3,7 +3,21 @@ import { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { useColorScheme } from "nativewind";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+
+function ThemeRestorer() {
+  const { setColorScheme } = useColorScheme();
+
+  useEffect(() => {
+    AsyncStorage.getItem("theme-preference").then((stored) => {
+      if (stored === "light" || stored === "dark" || stored === "system") setColorScheme(stored);
+    });
+  }, []);
+
+  return null;
+}
 
 function RootNavigator() {
   const { session, isLoading } = useAuth();
@@ -34,6 +48,10 @@ function RootNavigator() {
         options={{ presentation: "modal", title: "New Client" }}
       />
       <Stack.Screen
+        name="clients/import"
+        options={{ presentation: "modal", title: "Import Clients" }}
+      />
+      <Stack.Screen
         name="expenses/new"
         options={{ presentation: "modal", title: "New Expense" }}
       />
@@ -54,6 +72,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
+        <ThemeRestorer />
         <StatusBar style="dark" />
         <RootNavigator />
       </AuthProvider>

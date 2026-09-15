@@ -66,6 +66,7 @@ export function LineItemsEditor({ items, taxRate, discount, onChange }: Props) {
               value={String(item.unit_price)}
               onChangeText={(text) => updateItem(item.id, { unit_price: toNumber(text) })}
               prefix="$"
+              allowNegative
             />
             <View className="ml-auto items-end">
               <Text className="text-xs text-subtle">Total</Text>
@@ -103,11 +104,13 @@ function Field({
   value,
   onChangeText,
   prefix,
+  allowNegative,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   prefix?: string;
+  allowNegative?: boolean;
 }) {
   return (
     <View className="gap-1">
@@ -117,7 +120,10 @@ function Field({
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          keyboardType="decimal-pad"
+          // decimal-pad has no minus key on either platform, so a field that
+          // needs to support a negative (manual discount) value falls back
+          // to the default keyboard instead.
+          keyboardType={allowNegative ? "default" : "decimal-pad"}
           className="w-16 text-base text-ink"
         />
       </View>
@@ -135,7 +141,9 @@ function SummaryRow({ label, value }: { label: string; value: number }) {
 }
 
 function toNumber(text: string) {
-  const cleaned = text.replace(/[^0-9.]/g, "");
+  // Keeps a leading minus so a line item can be entered as a manual discount
+  // (a negative unit price / total), not just stripped like a plain amount.
+  const cleaned = text.replace(/[^0-9.-]/g, "").replace(/(?!^)-/g, "");
   const value = parseFloat(cleaned);
   return Number.isFinite(value) ? value : 0;
 }

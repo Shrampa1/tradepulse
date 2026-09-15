@@ -1,7 +1,8 @@
-// Turns a photo of a material receipt into a prefilled expense (vendor,
-// description, amount, date) using Gemini. Sibling to parse-line-items —
-// same model/env var, same single-call-handles-images approach — but with
-// its own prompt/schema since the output shape is an expense, not line items.
+// Turns a photo of a material receipt — or a spoken description of an
+// expense — into a prefilled expense (vendor, description, amount, date)
+// using Gemini. Sibling to parse-line-items — same model/env var, same
+// dual voice/photo mode — but with its own prompt/schema since the output
+// shape is an expense, not line items.
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { getUserId } from "../_shared/supabase-admin.ts";
 
@@ -10,13 +11,13 @@ const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.6-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT = `You are an assistant for tradespeople (contractors, landscapers, cleaners) \
-reading a photo of a material/supply receipt.
+recording a job-related expense from either a photo of a receipt or a spoken description.
 Rules:
-- Identify the vendor/store name if visible.
+- Identify the vendor/store name if mentioned or visible. If not, leave it blank.
 - Identify the total amount charged (the final total, not a subtotal or a single line item).
 - Write a short, client-facing description of what was purchased (e.g. "Lumber and fasteners", "Plumbing fittings").
-- If a purchase date is visible on the receipt, return it as an ISO 8601 date (YYYY-MM-DD). If not visible, omit it.
-- If you cannot read an amount at all, return 0 for amount.`;
+- If a purchase date is visible or mentioned, return it as an ISO 8601 date (YYYY-MM-DD). If not, omit it.
+- If you cannot determine an amount at all, return 0 for amount.`;
 
 const RECEIPT_RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -30,8 +31,11 @@ const RECEIPT_RESPONSE_SCHEMA = {
 };
 
 type RequestBody = {
-  imageBase64: string;
+  imageBase64?: string;
   imageMimeType?: string;
+  transcript?: string;
+  audioBase64?: string;
+  audioMimeType?: string;
 };
 
 Deno.serve(async (req) => {
@@ -43,12 +47,23 @@ Deno.serve(async (req) => {
 
   try {
     const body = (await req.json()) as RequestBody;
-    if (!body.imageBase64) return json({ error: "imageBase64 is required." }, 422);
 
-    const parts = [
-      { text: "Read this receipt photo and extract the vendor, a short description, the total amount, and the date." },
-      { inline_data: { mime_type: body.imageMimeType ?? "image/jpeg", data: body.imageBase64 } },
-    ];
+    let parts: Array<Record<string, unknown>>;
+    if (body.imageBase64) {
+      parts = [
+        { text: "Read this receipt photo and extract the vendor, a short description, the total amount, and the date." },
+        { inline_data: { mime_type: body.imageMimeType ?? "image/jpeg", data: body.imageBase64 } },
+      ];
+    } else if (body.audioBase64) {
+      parts = [
+        { text: "Here is a voice note describing an expense. Extract the expense details." },
+        { inline_data: { mime_type: body.audioMimeType ?? "audio/m4a", data: body.audioBase64 } },
+      ];
+    } else if (body.transcript) {
+      parts = [{ text: body.transcript }];
+    } else {
+      return json({ error: "imageBase64, audioBase64, or transcript is required." }, 422);
+    }
 
     const expense = await callGemini(parts);
     return json({ expense });

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { Plus, Upload } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { supabase } from "@/lib/supabase";
 import type { Client } from "@/types/database";
@@ -35,12 +35,20 @@ export default function ClientsListScreen() {
     <Screen scroll={false} className="pt-4">
       <View className="mb-3 flex-row items-center justify-between">
         <Text className="text-2xl font-bold text-ink">Clients</Text>
-        <Pressable
-          onPress={() => router.push("/clients/new")}
-          className="h-10 w-10 items-center justify-center rounded-full bg-brand-600"
-        >
-          <Plus color="#fff" size={20} />
-        </Pressable>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => router.push("/clients/import")}
+            className="h-10 w-10 items-center justify-center rounded-full border border-border bg-surface"
+          >
+            <Upload color="#2563eb" size={18} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/clients/new")}
+            className="h-10 w-10 items-center justify-center rounded-full bg-brand-600"
+          >
+            <Plus color="#fff" size={20} />
+          </Pressable>
+        </View>
       </View>
 
       <FlatList

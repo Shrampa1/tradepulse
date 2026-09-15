@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
-import { Pressable, Share, Text, View } from "react-native";
+import { Linking, Pressable, Share, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { Card } from "@/components/ui/Card";
@@ -33,11 +35,13 @@ export default function EstimateDetailScreen() {
   const [items, setItems] = useState<DraftLineItem[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobAddress, setJobAddress] = useState("");
+  const [notes, setNotes] = useState("");
   const [depositAmount, setDepositAmount] = useState("0");
   const [discountType, setDiscountType] = useState<EstimateDiscountType>("fixed");
   const [discountValue, setDiscountValue] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
 
@@ -65,6 +69,7 @@ export default function EstimateDetailScreen() {
         setClient(loadedClient);
         setExpenses(expenseRows ?? []);
         setJobAddress(rest.job_address ?? "");
+        setNotes(rest.notes ?? "");
         setDepositAmount(String(rest.deposit_amount ?? 0));
         setDiscountType(rest.discount_type ?? "fixed");
         setDiscountValue(String(rest.discount_value ?? 0));
@@ -95,6 +100,7 @@ export default function EstimateDetailScreen() {
       .update({
         client_id: client?.id ?? null,
         job_address: jobAddress || null,
+        notes: notes.trim() || null,
         deposit_amount: toNumber(depositAmount),
         discount_type: discountType,
         discount_value: toNumber(discountValue),
@@ -133,6 +139,31 @@ export default function EstimateDetailScreen() {
     ]);
   }
 
+  function quoteUrl() {
+    if (!estimate) return null;
+    return `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/public-quote?token=${estimate.public_token}`;
+  }
+
+  function handlePreview() {
+    const url = quoteUrl();
+    if (url) Linking.openURL(url);
+  }
+
+  async function handleDownloadPdf() {
+    const url = quoteUrl();
+    if (!url) return;
+    setIsPreparingPdf(true);
+    setError(null);
+    try {
+      const { uri } = await Print.printToFileAsync({ uri: url });
+      await Sharing.shareAsync(uri, { mimeType: "application/pdf" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate the PDF.");
+    } finally {
+      setIsPreparingPdf(false);
+    }
+  }
+
   async function handleSend() {
     if (!estimate) return;
     setIsSending(true);
@@ -160,7 +191,12 @@ export default function EstimateDetailScreen() {
   return (
     <Screen>
       <View className="flex-row items-center justify-between">
-        <Text className="text-2xl font-bold text-ink">Estimate</Text>
+        <View>
+          <Text className="text-2xl font-bold text-ink">Estimate</Text>
+          {estimate.invoice_number && (
+            <Text className="text-xs text-subtle">#{estimate.invoice_number}</Text>
+          )}
+        </View>
         <StatusBadge status={estimate.status} />
       </View>
 
@@ -168,6 +204,7 @@ export default function EstimateDetailScreen() {
         <Text className="text-sm font-semibold text-ink">Client</Text>
         <ClientPicker value={client} onChange={setClient} />
         <Input label="Job address" value={jobAddress} onChangeText={setJobAddress} />
+        <Input label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
       </Card>
 
       <Card className="gap-3">
@@ -256,6 +293,20 @@ export default function EstimateDetailScreen() {
       </Card>
 
       {error && <Text className="text-sm text-danger">{error}</Text>}
+
+      <View className="flex-row gap-2">
+        <View className="flex-1">
+          <Button label="Preview" variant="secondary" onPress={handlePreview} />
+        </View>
+        <View className="flex-1">
+          <Button
+            label="Download PDF"
+            variant="secondary"
+            onPress={handleDownloadPdf}
+            loading={isPreparingPdf}
+          />
+        </View>
+      </View>
 
       <View className="gap-2 pb-4">
         <Button label="Send to client" onPress={handleSend} loading={isSending} />
