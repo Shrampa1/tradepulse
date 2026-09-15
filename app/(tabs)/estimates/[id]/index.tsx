@@ -187,7 +187,11 @@ export default function EstimateDetailScreen() {
     setIsPreparingPdf(true);
     setError(null);
     try {
-      const { uri } = await Print.printToFileAsync({ uri: url });
+      // This version of expo-print only generates from an html string, not
+      // a remote uri, so fetch the same server-rendered page first.
+      const htmlResponse = await fetch(url);
+      const html = await htmlResponse.text();
+      const { uri } = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(uri, { mimeType: "application/pdf" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not generate the PDF.");
