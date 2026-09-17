@@ -1,6 +1,6 @@
 name: Android build
 
-# Builds a real, installable debug APK entirely in the cloud -- no local
+# Builds a real, installable APK entirely in the cloud -- no local
 # Android Studio or Expo account needed. `expo prebuild` generates the
 # native android/ project from app.json fresh every run (this repo
 # doesn't commit one), then a plain Gradle build takes it from there --
@@ -58,14 +58,24 @@ jobs:
           # same removed-legacy-package issue applies here.
           packages: "platform-tools platforms;android-${{ steps.sdk.outputs.compile_sdk }}"
 
-      - name: Build debug APK
+      # assembleDebug, not assembleRelease -- a debug React Native/Expo
+      # build does NOT embed the JS bundle; it expects to fetch it live
+      # from a Metro dev server on the build machine's network. Installed
+      # standalone with no Metro reachable, it crashes on launch with
+      # nothing to run (this is unlike the Capacitor/S.Ops app, whose web
+      # assets are always bundled into the APK regardless of build type).
+      # assembleRelease embeds the JS + assets and gets minified/shrunk --
+      # Expo's default generated build.gradle signs the release variant
+      # with the same debug keystore unless a real one is configured, so
+      # this stays installable without any extra signing setup.
+      - name: Build release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
-          name: tradepulse-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: tradepulse-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
