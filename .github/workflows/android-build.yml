@@ -1,0 +1,68 @@
+name: Android build
+
+# Builds a real, installable debug APK entirely in the cloud -- no local
+# Android Studio or Expo account needed. `expo prebuild` generates the
+# native android/ project from app.json fresh every run (this repo
+# doesn't commit one), then a plain Gradle build takes it from there --
+# same recipe as the S.Ops Capacitor app's own CI, adapted for Expo's
+# managed workflow instead of `cap sync`.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      # Client-side, safe-to-expose values (see .env.example's own header
+      # comment) -- baked in at build time since Expo inlines EXPO_PUBLIC_*
+      # vars into the JS bundle, not read at runtime. Set as repo secrets
+      # (Settings -> Secrets and variables -> Actions) rather than
+      # hardcoded here just to keep them out of the workflow file itself.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_CURRENCY: USD
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm install
+
+      - name: Generate the native android/ project from app.json
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Read the compileSdkVersion expo prebuild generated
+        id: sdk
+        run: |
+          VERSION=$(grep -rhoE 'compileSdkVersion[[:space:]]*=?[[:space:]]*[0-9]+' android/build.gradle android/app/build.gradle 2>/dev/null | grep -oE '[0-9]+' | head -1)
+          if [ -z "$VERSION" ]; then VERSION=35; fi
+          echo "Detected compileSdkVersion: $VERSION"
+          echo "compile_sdk=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          # See sops-mobile's own workflow for why "tools" is left out --
+          # same removed-legacy-package issue applies here.
+          packages: "platform-tools platforms;android-${{ steps.sdk.outputs.compile_sdk }}"
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradepulse-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
