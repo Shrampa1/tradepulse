@@ -31,7 +31,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm install
+      # This project's own package.json needs --legacy-peer-deps locally
+      # too (lucide-react-native's peer dep caps at React 18, this project
+      # is on React 19) -- see the repo's own install notes.
+      - run: npm install --legacy-peer-deps
 
       - name: Generate the native android/ project from app.json
         run: npx expo prebuild --platform android --no-install
