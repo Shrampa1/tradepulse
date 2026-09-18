@@ -34,11 +34,18 @@
         "RECORD_AUDIO",
         "CAMERA",
         "READ_MEDIA_IMAGES"
-      ],
-      "edgeToEdgeEnabled": false
+      ]
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "edgeToEdgeEnabled": false
+          }
+        }
+      ],
       [
         "expo-audio",
         {
