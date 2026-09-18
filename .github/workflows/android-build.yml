@@ -46,16 +46,19 @@ jobs:
       # launch Activity's own manifest entry). None of this is committed
       # to the repo (expo prebuild regenerates it fresh every run), so
       # printing it here is the only way to see it without device logs.
+      # Grepped down to just the interesting lines -- the full files were
+      # mostly template boilerplate that took several minutes of scrolling
+      # a live-tailing log to get past.
       - name: Print generated native config for diagnosis
         run: |
-          echo "===== android/gradle.properties ====="
-          cat android/gradle.properties
+          echo "===== android/gradle.properties: non-comment, non-blank lines ====="
+          grep -vE '^\s*(#|$)' android/gradle.properties
           echo
-          echo "===== android/app/build.gradle: signingConfigs + buildTypes ====="
-          awk '/signingConfigs *\{/,0' android/app/build.gradle | head -60
+          echo "===== android/app/build.gradle: signingConfig / minify / shrink lines ====="
+          grep -nE 'signingConfig|minifyEnabled|shrinkResources|enableProguard' android/app/build.gradle
           echo
-          echo "===== AndroidManifest.xml ====="
-          cat android/app/src/main/AndroidManifest.xml
+          echo "===== AndroidManifest.xml: <application> and <activity> tags ====="
+          grep -nE '<application|<activity|android:theme|android:exported|android:launchMode' android/app/src/main/AndroidManifest.xml
 
       - name: Read the compileSdkVersion expo prebuild generated
         id: sdk
