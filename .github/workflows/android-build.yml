@@ -39,6 +39,20 @@ jobs:
       - name: Generate the native android/ project from app.json
         run: npx expo prebuild --platform android --no-install
 
+      # Two prior attempts to disable this via app.json (a bare
+      # android.edgeToEdgeEnabled key, then the expo-build-properties
+      # plugin's android.edgeToEdgeEnabled) both had NO effect -- verified
+      # via the diagnostic step below, gradle.properties kept coming out
+      # with edgeToEdgeEnabled=true either way. Rather than guess at a
+      # third Expo-level mechanism blind, force it directly in the
+      # generated file right before Gradle reads it -- guaranteed to work
+      # regardless of whatever Expo's own config plugin resolution is
+      # doing (or not doing) with the app.json setting.
+      - name: Force-disable edgeToEdgeEnabled in the generated project
+        run: |
+          sed -i 's/^edgeToEdgeEnabled=.*/edgeToEdgeEnabled=false/' android/gradle.properties
+          grep '^edgeToEdgeEnabled=' android/gradle.properties
+
       # Diagnostic only -- the app installs fine but crashes to a blank
       # screen on launch with no crash dialog, which usually means either a
       # very early native-init failure or something in how the generated
