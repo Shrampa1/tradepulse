@@ -39,6 +39,24 @@ jobs:
       - name: Generate the native android/ project from app.json
         run: npx expo prebuild --platform android --no-install
 
+      # Diagnostic only -- the app installs fine but crashes to a blank
+      # screen on launch with no crash dialog, which usually means either a
+      # very early native-init failure or something in how the generated
+      # project is configured (New Architecture on/off, minification, the
+      # launch Activity's own manifest entry). None of this is committed
+      # to the repo (expo prebuild regenerates it fresh every run), so
+      # printing it here is the only way to see it without device logs.
+      - name: Print generated native config for diagnosis
+        run: |
+          echo "===== android/gradle.properties ====="
+          cat android/gradle.properties
+          echo
+          echo "===== android/app/build.gradle: signingConfigs + buildTypes ====="
+          awk '/signingConfigs *\{/,0' android/app/build.gradle | head -60
+          echo
+          echo "===== AndroidManifest.xml ====="
+          cat android/app/src/main/AndroidManifest.xml
+
       - name: Read the compileSdkVersion expo prebuild generated
         id: sdk
         run: |
