@@ -6,6 +6,12 @@ import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "nativewind";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { installCrashReporter } from "@/lib/crashReporter";
+
+// Registered at module scope (not inside a component) so it's in place
+// before anything below gets a chance to render -- see crashReporter.ts's
+// own header comment for why this is here at all.
+installCrashReporter();
 
 function ThemeRestorer() {
   const { setColorScheme } = useColorScheme();
