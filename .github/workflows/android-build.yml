@@ -36,6 +36,22 @@ jobs:
       # is on React 19) -- see the repo's own install notes.
       - run: npm install --legacy-peer-deps
 
+      # react-native-exception-handler (added for the temporary crash
+      # reporter -- see src/lib/crashReporter.ts) is unmaintained and its
+      # own android/build.gradle still calls the long-shutdown jcenter()
+      # repository. On the Gradle/AGP version Expo 57's prebuild generates,
+      # jcenter() isn't just empty, it no longer exists as a method at all,
+      # so the build fails immediately with "Could not find method
+      # jcenter()" while configuring that project. Its buildscript block
+      # declares zero actual dependencies (nothing in node_modules'
+      # published source uses jcenter for anything), so swapping it for
+      # mavenCentral() is a no-op for what actually gets resolved -- same
+      # "patch the generated/vendored file directly" approach as the
+      # gradle.properties fix below, since there's no upstream fix to pull
+      # in for an abandoned package.
+      - name: Patch react-native-exception-handler's dead jcenter() repo
+        run: sed -i 's/jcenter()/mavenCentral()/' node_modules/react-native-exception-handler/android/build.gradle
+
       - name: Generate the native android/ project from app.json
         run: npx expo prebuild --platform android --no-install
 
